@@ -1,5 +1,9 @@
 import plotly.express as px
 import plotly.graph_objects as go
+import numpy as np
+from matplotlib import pyplot as plt
+import math
+
 
 
 # Display all airports worldwide
@@ -17,6 +21,7 @@ def all_airports(df):
         color='tzone'
     )
     fig.show()
+
 
 # Display all international flights
 # Parameters:
@@ -42,6 +47,7 @@ def international_flights(df):
 
     fig.show()
 
+
 # Display flights only in the United States
 # Parameters:
 #   df --> DataFrame of flight data
@@ -60,6 +66,7 @@ def only_usa(df):
             geo_scope='usa',
         )
     fig.show()
+
 
 # Display all flight paths from airports list
 # Parameters: 
@@ -81,8 +88,7 @@ def flight_paths(airports, df):
             marker=dict(color='red'),
             showlegend=False
         ))
-
-
+    
     destinations = df[df['faa'].isin(airports)]
 
     for i, dest in destinations.iterrows():
@@ -108,6 +114,52 @@ def flight_paths(airports, df):
     fig = go.Figure(data=[map])
 
     fig.show()
+
+
+# Calculates the Euclidean Distance between two locations
+# Parameters:
+#   loc1 --> tuple of lat, lon values for location 1
+#   loc2 --> tuple of lat, lon values for locations 2
+# Output: None
+# Return: Float of euclidean distance between two points
+def euclidean_distance(loc1, loc2):
+    diff1 = loc2[0] - loc1[0]
+    diff2 = loc2[1] - loc1[1]
+    return math.sqrt((diff1**2 + diff2**2))
+
+
+# Creates list of Euclidean Distances between JFK and each airport given
+# Parameters:
+#   df --> DataFrame of flight data
+#   airports --> list of faa codes for different airports
+# Output: None
+# Returns: list of distances
+def calc_distances(df, airports):
+    df = df[df['faa'].isin(airports)]
+    print(df['faa'])
+    jfk = (40.63980103, -73.77890015)
+    distances = []
+
+    for i, airport in df.iterrows():
+        loc = (airport['lat'], airport['lon'])
+        distance = euclidean_distance(jfk, loc)
+        distances.append(distance)
+
+    return distances
+
+
+# Calculates and displays a histogram using euclidean distances between airports
+# Parameters: 
+#   df --> DataFrame of flight data
+#   airports --> list of faa codes for different airports
+# Output: Histogram diagram
+# Return: None
+def create_histogram(df, airports):
+    lst = calc_distances(df, list(df['faa']))
+    plt.hist(lst,bins=30,label='test',edgecolor='black')
+    plt.ylabel('Distance Between JFK and Airport')
+    plt.xlabel('Airport Index')
+    plt.show()
 
 
 
