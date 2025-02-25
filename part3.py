@@ -1,5 +1,6 @@
 import sqlite3
 import part1
+import pandas as pd
 
 
 def verify_computed_distances():
@@ -8,7 +9,20 @@ def verify_computed_distances():
 
 def get_nyc_airports():
     """Retrieve all NYC airports from the database."""
-    pass
+    nyc_lst = ['FOK','ISP','FRG','JFK','LGA','HPN','MGJ','SWF','BGM','ELM','ITH','JHW',
+               'DKK','BUF','IAG','ROC','SYC','RME','ALB','SCH','GFL','ART','LKP','SLK','PBG','MSS','OGS']
+    
+    conn = sqlite3.connect('flights_database.db')
+    cursor = conn.cursor()
+    cursor.execute(f'SELECT * FROM airports')
+
+    df = pd.DataFrame(cursor.fetchall(), columns = [x[0] for x in cursor.description])
+
+    df = df[df['faa'].isin(nyc_lst)]
+
+    return df
+
+    
 
 def visualize_flight_destinations():
     """Generate a map of all destinations from a given NYC airport on a specific day."""
@@ -18,9 +32,40 @@ def get_flight_statistics():
     """Return statistics such as flight count, unique destinations, and most frequent destination."""
     pass
 
-def get_airplane_usage():
+def get_airplane_usage(departure, arrival):
     """Return a dictionary describing the number of times each plane type was used for a specific route."""
-    pass
+
+    plane_dict = {'Fixed wing single engine': 0, 'Rotorcraft': 0, 'Fixed wing multi engine': 0}
+
+    conn = sqlite3.connect('flights_database.db')
+    cursor = conn.cursor()
+
+    query1 = f'SELECT tailnum,origin,dest FROM flights'
+    query2 = f'SELECT tailnum,type FROM planes'
+
+    cursor.execute(query1)
+    flights = pd.DataFrame(cursor.fetchall(), columns = [x[0] for x in cursor.description]) #Creates dataframe with data from flights table
+
+    cursor.execute(query2)
+    planes = pd.DataFrame(cursor.fetchall(), columns = [x[0] for x in cursor.description]) #Creates dataframe with data from planes table
+
+    planes_lst = list(planes['tailnum']) #Makes list of all the 'tailnum' column from planes dataframe
+
+    #Filters data in flights dataframe to only include flights from given origin to destination
+    flights = flights[flights['origin'] == departure]
+    flights = flights[flights['dest'] == arrival]
+
+    #Iterates through each tailnum of the the filtered flights dataframe
+    for flight in list(flights['tailnum']):
+        #Increases the plane type counter in the dictionary if the flight has a tailnum in the planes dataframe
+        if flight in planes_lst:
+            plane_type = planes['type'].loc[planes_lst.index(flight)]
+            plane_dict[plane_type] += 1
+
+
+    return plane_dict #Returns the dictionary with the count of each plane type
+
+    
 
 def average_departure_delay():
     """Compute and visualize the average departure delay per airline."""
