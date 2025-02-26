@@ -30,10 +30,10 @@ in the table planes .
 13. (Julie) Is there a relation between the sign of this inner product and the air time?
 
 # Part 4
-1. Check the table flights for missing values think of ways to resolve them.
-2. Look for duplicates in the flights table. Take into account that here a flight number can occur multiple times, only count it as duplicate when the same flight
+1. (Hunter) Check the table flights for missing values think of ways to resolve them.
+2. (Hunter) Look for duplicates in the flights table. Take into account that here a flight number can occur multiple times, only count it as duplicate when the same flight
 appears multiple times.
-3. Convert the (schedueled and actual) arrival departure and departure moments
+3. (Hunter) Convert the (schedueled and actual) arrival departure and departure moments
 to datetime objects.
 4. Write a function that checks whether the data in   is in order. That
 is, verify that the air time , dep time ,   etc. match for each
