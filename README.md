@@ -10,14 +10,14 @@ and produces a figure similar to the one from part 1 containing all destinations
 of flights on that day.
 4. Also write a function that returns statistics for that day, i.e. how many flights,
 how many unique destinations, which destination is visited most often, etc.
-5. Write a function that, given a departing airport and an arriving airport, returns a dict describing how many times each plane type was used for that flight
+5. (Done) Write a function that, given a departing airport and an arriving airport, returns a dict describing how many times each plane type was used for that flight
 trajectory. For this task you will need to match the columns to type
 in the table planes and match this to the tailnum s in the table .
-6. Compute the average departure delay per flight for each of the airlines. Visualize
+6. (Done) Compute the average departure delay per flight for each of the airlines. Visualize
 the results in a barplot with the full (rotated) names of the airlines on the x-axis.
-7. Write a function that takes as input a range of months and a destination and
+7. (Done) Write a function that takes as input a range of months and a destination and
 returns the amount of delayed flights to that destination.
-8. Write a function that takes a destination airport as input and returns the top 5
+8. (Done) Write a function that takes a destination airport as input and returns the top 5
 airplane manufacturers with planes departing to this destination. For this task,
 you have to combine data from flights and planes.
 Atish - 9. Investigate whether there is a relationship between the distance of a flight and
@@ -26,8 +26,8 @@ the arrival delay time.
 compute the average speed by taking the average of the distance divided by flight time over all flights of that model. Use this information to fill the column speed
 in the table planes .
 11. The wind direction is given in weather in degrees. Compute for each airport the direction the plane follows when flying there from New York.
-12. Write a function that computes the inner product between the flight direction and the wind speed of a given flight.
-Atish - 13. Is there a relation between the sign of this inner product and the air time?
+12. (Julie) Write a function that computes the inner product between the flight direction and the wind speed of a given flight.
+13. (Julie) Is there a relation between the sign of this inner product and the air time?
 
 # Part 4
 1. Check the table flights for missing values think of ways to resolve them.

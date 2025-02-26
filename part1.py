@@ -1,6 +1,7 @@
 import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
+import pandas as pd
 from matplotlib import pyplot as plt
 import math
 
@@ -161,5 +162,42 @@ def create_histogram(df, airports):
     plt.xlabel('Airport Index')
     plt.show()
 
+
+
+R = 3958.8  # Earth's radius in miles
+
+
+def calculate_geodesic_distance(lat1, lon1, lat2, lon2):
+    """Calculates the geodesic distance between two airports using latitude and longitude.
+    params: latitude and longitude of airport pairs.
+    """
+
+    # Convert to radians
+    lat1, lon1, lat2, lon2 = map(np.radians, [lat1, lon1, lat2, lon2])
+
+    # calculate differences
+    delta_phi = lat2 - lat1
+    delta_lamda = lon2 - lon1
+    phi_m = (lat1 + lat2) / 2
+
+    # geodesic distance
+    distance = R * np.sqrt(
+        (2 * np.sin(delta_phi/2) * np.cos(delta_lamda/ 2)) ** 2 +
+        ( 2* np.cos(phi_m) * np.sin(delta_lamda / 2)) ** 2
+    )
+
+    return distance
+
+
+def calculate_all_distances(df):
+    distances = []
+
+    for i , row1 in df.iterrows():
+        for j , row2 in df.iterrows():
+            if i != j:
+                dist = calculate_geodesic_distance(row1['lat'], row1['lon'], row2['lat'], row2['lon'])
+                distances.append({'airport1': row1['faa'], 'airport2': row2['faa'], 'distance_m': dist})
+    
+    return pd.DataFrame(distances)
 
 
