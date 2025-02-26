@@ -17,6 +17,9 @@ def main():
 
     connection.close()
 
+    distance_df = part1.calculate_all_distances(df)
+    distance_df.to_csv("geodesic_distances.csv", index=False)
+
 if __name__ == '__main__':
     main()
 

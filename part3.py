@@ -1,12 +1,43 @@
 import sqlite3
 import part1
 import pandas as pd
+
 from matplotlib import pyplot as plt
 
 
-def verify_computed_distances():
-    """Verify that the computed distances match the distances in the flights table."""
-    pass
+
+def verify_computed_distance(conn, csv_path="geodesic_distances.csv"):
+    """
+    Compare the flight distances stored in the database with geodesic distances from a CSV file.
+    
+    Params:
+    - conn: connection to the SQLite database.
+    - csv_path (str): Path to the geodesic distances CSV file.
+    
+    Returns:
+    - merged_df (DataFrame): DataFrame containing flight distances and geodesic distances.
+    """
+    
+    flights_df = pd.read_sql_query("SELECT origin, dest, distance FROM flights;", conn)
+    
+    # Load the geodesic distances from CSV
+    geodesic_df = pd.read_csv(csv_path)
+
+    # Rename columns to match for easier merging
+    geodesic_df.rename(columns={"airport1": "origin", "airport2": "dest", "distance_m": "geodesic_distance"}, inplace=True)
+
+    # Merge both DataFrames on origin and destination
+    merged_df = flights_df.merge(geodesic_df, on=["origin", "dest"], how="left")
+
+    # Compute the difference between actual and computed distances
+    merged_df["difference"] = merged_df["distance"] - merged_df["geodesic_distance"]
+
+    # Save results to CSV
+    merged_df.to_csv("distance_comparison.csv", index=False)
+
+    print("Comparison complete! Check 'distance_comparison.csv' for full results.")
+
+    return merged_df.head()
 
 def get_nyc_airports():
     """Retrieve all NYC airports from the database."""
@@ -23,9 +54,7 @@ def get_nyc_airports():
 
     return df
 
-    
-
-def visualize_flight_destinations():
+def visualize_flight_destinations(conn, month, day, airport):
     """Generate a map of all destinations from a given NYC airport on a specific day."""
     pass
 
