@@ -2,6 +2,7 @@ import sqlite3
 import part1
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 
 
 def verify_computed_distance(conn, csv_path="geodesic_distances.csv"):
@@ -56,7 +57,7 @@ def get_nyc_airports(conn):
     
     return nyc_airports   
 
-def visualize_flight_destinations(conn, day):
+def visualize_flight_destinations(conn, month, day, airport):
     """Generate a map of all destinations from a given NYC airport on a specific day."""
     pass
 
