@@ -20,7 +20,7 @@ returns the amount of delayed flights to that destination.
 8. (Done) Write a function that takes a destination airport as input and returns the top 5
 airplane manufacturers with planes departing to this destination. For this task,
 you have to combine data from flights and planes.
-9. Investigate whether there is a relationship between the distance of a flight and
+Atish - 9. Investigate whether there is a relationship between the distance of a flight and
 the arrival delay time.
 10. Group the table flights by plane model using the tailnum . For each model,
 compute the average speed by taking the average of the distance divided by flight time over all flights of that model. Use this information to fill the column speed
@@ -45,7 +45,7 @@ important. Consider studying what the effect of the wind or precipitation is on
 different plane types.
 7. Next week, the specifics of the dashboard will be released. Count on requirements asking for the statistics for different departure and arrival airports. Consider making functions that take these airports as input and generate numerical or graphical representations of the data grouped by them. Many of the tasks from the previous parts can be grouped!
    
-9. The dashboard will also contain a general results tab that can show anything you find remarkable in the data. Think of things you would like to display here. Are there interesting relations to be seen in the data? Are there airports that stand out when it comes to delay? Are there plane times that fly considerable faster? Which plane routes are taken most often from NYC? Is there a significant relation between (some) weather variables and the delay time? Come up with convincing graphical or numerical summaries that can be displayed in this part of the dashboard to display the results of the study.
+Atish - 9. The dashboard will also contain a general results tab that can show anything you find remarkable in the data. Think of things you would like to display here. Are there interesting relations to be seen in the data? Are there airports that stand out when it comes to delay? Are there plane times that fly considerable faster? Which plane routes are taken most often from NYC? Is there a significant relation between (some) weather variables and the delay time? Come up with convincing graphical or numerical summaries that can be displayed in this part of the dashboard to display the results of the study.
 
 
 
