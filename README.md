@@ -10,14 +10,14 @@ and produces a figure similar to the one from part 1 containing all destinations
 of flights on that day.
 4. Also write a function that returns statistics for that day, i.e. how many flights,
 how many unique destinations, which destination is visited most often, etc.
-5. Write a function that, given a departing airport and an arriving airport, returns a dict describing how many times each plane type was used for that flight
+5. (Done) Write a function that, given a departing airport and an arriving airport, returns a dict describing how many times each plane type was used for that flight
 trajectory. For this task you will need to match the columns to type
 in the table planes and match this to the tailnum s in the table .
-6. Compute the average departure delay per flight for each of the airlines. Visualize
+6. (Done) Compute the average departure delay per flight for each of the airlines. Visualize
 the results in a barplot with the full (rotated) names of the airlines on the x-axis.
-7. Write a function that takes as input a range of months and a destination and
+7. (Done) Write a function that takes as input a range of months and a destination and
 returns the amount of delayed flights to that destination.
-8. Write a function that takes a destination airport as input and returns the top 5
+8. (Done) Write a function that takes a destination airport as input and returns the top 5
 airplane manufacturers with planes departing to this destination. For this task,
 you have to combine data from flights and planes.
 9. Investigate whether there is a relationship between the distance of a flight and
