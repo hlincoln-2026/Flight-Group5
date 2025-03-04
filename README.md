@@ -25,7 +25,7 @@ the arrival delay time.
 10. (Dion) Group the table flights by plane model using the tailnum . For each model,
 compute the average speed by taking the average of the distance divided by flight time over all flights of that model. Use this information to fill the column speed
 in the table planes .
-11. (Dion) The wind direction is given in weather in degrees. Compute for each airport the direction the plane follows when flying there from New York.
+11. (Julie) The wind direction is given in weather in degrees. Compute for each airport the direction the plane follows when flying there from New York.
 12. (Julie) Write a function that computes the inner product between the flight direction and the wind speed of a given flight.
 13. (Julie) Is there a relation between the sign of this inner product and the air time?
 
