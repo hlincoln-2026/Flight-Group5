@@ -232,14 +232,131 @@ def compute_average_plane_speeds():
     """Compute and update the average speed for each plane model in the database."""
     pass
 
-def compute_flight_directions():
-    """Determine the flight direction for each airport from NYC."""
-    pass
+def compute_flight_directions(conn):
+    """
+    Determine the flight direction (direction_x, direction_y) for each flight
+    """
 
-def compute_wind_effect_on_flights():
-    """Compute the inner product of flight direction and wind speed for given flights."""
-    pass
+    cursor = conn.cursor()
+    try:
+        cursor.execute("ALTER TABLE flights ADD COLUMN direction_x REAL")
+    except sqlite3.OperationalError:
+        pass  
 
-def analyze_wind_effect_on_air_time():
-    """Analyze if the wind effect has a significant impact on air time."""
-    pass
+    try:
+        cursor.execute("ALTER TABLE flights ADD COLUMN direction_y REAL")
+    except sqlite3.OperationalError:
+        pass  
+
+    # 1) JOIN flights->airports (origin) and flights->airports (dest)
+    query = """
+        SELECT 
+            f.rowid AS flight_rowid,
+            f.origin, 
+            f.dest,
+            a1.lat AS origin_lat,
+            a1.lon AS origin_lon,
+            a2.lat AS dest_lat,
+            a2.lon AS dest_lon
+        FROM flights AS f
+        JOIN airports a1
+          ON f.origin = a1.faa
+        JOIN airports a2
+          ON f.dest   = a2.faa
+    """
+    df = pd.read_sql_query(query, conn)
+    
+    if df.empty:
+        print("No flights/airports data found. Check your joins or data.")
+        return df
+    
+    # 2) Compute direction as simple difference in lon and lat
+
+    df['direction_x'] = df['dest_lon'] - df['origin_lon']
+    df['direction_y'] = df['dest_lat'] - df['origin_lat']
+    
+    # 3) Update 'flights' table with direction_x, direction_y 
+    update_data = df[['direction_x','direction_y','flight_rowid']].values.tolist()
+    
+    try:
+        cursor.executemany("""
+            UPDATE flights
+               SET direction_x = ?,
+                   direction_y = ?
+             WHERE rowid = ?
+        """, update_data)
+        conn.commit()
+        print("Updated flights.direction_x, flights.direction_y successfully.")
+    except sqlite3.OperationalError as e:
+        print("Could not update flights table with direction_x/direction_y. Check if columns exist.")
+        print("Error:", e)
+    finally:
+        cursor.close()
+
+    return df
+
+def compute_wind_effect_on_flights(conn):
+
+    cursor = conn.cursor()
+    try:
+        cursor.execute("ALTER TABLE flights ADD COLUMN wind_effect REAL")
+    except sqlite3.OperationalError:
+        pass  
+
+    query = """
+        SELECT
+            f.rowid AS flight_rowid,
+            f.origin,
+            f.dest,
+            f.direction_x,
+            f.direction_y,
+            -- no more origin_lon, dest_lon, etc. needed 
+            w.wind_speed,
+            w.wind_dir
+        FROM flights AS f
+        JOIN weather AS w
+          ON f.origin = w.origin
+         AND f.year   = w.year
+         AND f.month  = w.month
+         AND f.day    = w.day
+         AND f.hour   = w.hour
+    """
+
+    df = pd.read_sql_query(query, conn)
+    if df.empty:
+        print("No joined weather/flight data found. Check your JOIN conditions.")
+        return df
+
+    # Convert wind_dir to radians
+    df['wind_dir_radians'] = np.radians(df['wind_dir'])
+    df['wind_x'] = df['wind_speed'] * np.sin(df['wind_dir_radians'])
+    df['wind_y'] = df['wind_speed'] * np.cos(df['wind_dir_radians'])
+
+    # Dot product with direction_x, direction_y
+    df['wind_effect'] = df['direction_x'] * df['wind_x'] + df['direction_y'] * df['wind_y']
+
+    print(df[['flight_rowid','origin','dest','wind_speed','wind_dir','wind_effect']].head())
+
+    update_data = df[['wind_effect','flight_rowid']].values.tolist()
+    try:
+        cursor.executemany("UPDATE flights SET wind_effect = ? WHERE rowid = ?", update_data)
+        conn.commit()
+        print("Wind effect computed and stored in flights.wind_effect.")
+    except sqlite3.OperationalError as e:
+        print("Could not update flights table with wind_effect.")
+        print("Error:", e)
+    finally:
+        cursor.close()
+
+    return df
+
+def analyze_wind_effect_on_air_time(conn):
+
+    # 1) Query the flights table for wind_effect, air_time
+    query = """
+        SELECT wind_effect, air_time
+          FROM flights
+         WHERE wind_effect IS NOT NULL
+           AND air_time    IS NOT NULL
+    """
+    df = pd.read_sql_query(query, conn)
