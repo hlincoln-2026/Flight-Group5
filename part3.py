@@ -351,6 +351,12 @@ def compute_wind_effect_on_flights(conn):
     return df
 
 def analyze_wind_effect_on_air_time(conn):
+    """
+    Analyze if the wind effect (dot product between flight direction and wind vector)
+    has a relationship with air time. Specifically, we check whether flights with
+    a positive wind effect (tailwind) differ in average air time from those with
+    a negative wind effect (headwind).
+    """
 
     # 1) Query the flights table for wind_effect, air_time
     query = """
@@ -360,3 +366,34 @@ def analyze_wind_effect_on_air_time(conn):
            AND air_time    IS NOT NULL
     """
     df = pd.read_sql_query(query, conn)
+
+    # If the table or columns are empty, just return
+    if df.empty:
+        print("No data found with both wind_effect and air_time.")
+        return
+
+       # 2) Split the DataFrame into positive and negative subsets
+    df_pos = df[df['wind_effect'] >= 0]
+    df_neg = df[df['wind_effect'] < 0]
+
+    # 3) QQ-plots 
+    fig, axs = plt.subplots(1, 2, figsize=(12, 6), sharey=True)
+    fig.suptitle('Wind Effect vs. Air Time (Tailwind vs. Headwind)')
+
+    # --- PLOT 1: Positive (Tailwind) ---
+    axs[0].scatter(df_pos['wind_effect'], df_pos['air_time'],
+                   color='blue', alpha=0.5)
+    axs[0].set_title('Positive Wind Effect (Tailwind)')
+    axs[0].set_xlabel('Wind Effect (Dot Product)')
+    axs[0].set_ylabel('Air Time (minutes)')
+    axs[0].grid(True)
+
+    # --- PLOT 2: Negative (Headwind) ---
+    axs[1].scatter(df_neg['wind_effect'], df_neg['air_time'],
+                   color='red', alpha=0.5)
+    axs[1].set_title('Negative Wind Effect (Headwind)')
+    axs[1].set_xlabel('Wind Effect (Dot Product)')
+    axs[1].grid(True)
+
+    plt.tight_layout()
+    plt.show()
