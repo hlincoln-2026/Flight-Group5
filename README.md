@@ -38,7 +38,7 @@ to datetime objects.
 4. Write a function that checks whether the data in   is in order. That
 is, verify that the air time , dep time ,   etc. match for each
 flight. If not, think of ways to resolve it if this is not the case.
-5. Create a column that contains the local arrival time, incorporating the time
+5. (Julie) Create a column that contains the local arrival time, incorporating the time
 difference between arrival and departure airport.
 6. In addition, information on the different types of planes and airlines will be
 important. Consider studying what the effect of the wind or precipitation is on
