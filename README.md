@@ -35,7 +35,7 @@ in the table planes .
 appears multiple times.
 3. (Hunter) Convert the (schedueled and actual) arrival departure and departure moments
 to datetime objects.
-4. Write a function that checks whether the data in   is in order. That
+4. (Julie) Write a function that checks whether the data in   is in order. That
 is, verify that the air time , dep time ,   etc. match for each
 flight. If not, think of ways to resolve it if this is not the case.
 5. (Julie) Create a column that contains the local arrival time, incorporating the time
