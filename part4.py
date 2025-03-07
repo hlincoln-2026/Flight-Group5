@@ -19,7 +19,60 @@ def convert_flight_times_to_datetime(conn):
 
 #Check if the data in flights is in order (validate air time, departure time, etc.)
 def validate_flight_data(conn):
-	pass
+    """
+    Validate the 'flights' table for logical inconsistencies.
+
+    Checks performed:
+    - dep_time should match sched_dep_time + dep_delay
+    - arr_time should match sched_arr_time + arr_delay
+    - air_time should be consistent with arr_time - dep_time
+    """
+
+    query = """
+        SELECT 
+            rowid AS flight_rowid,
+            year, month, day, 
+            dep_time, sched_dep_time, dep_delay, 
+            arr_time, sched_arr_time, arr_delay, 
+            air_time
+        FROM flights
+    """
+
+    df = pd.read_sql_query(query, conn)
+
+    if df.empty:
+        print("No flight data found in the database.")
+        return df
+
+
+    # 1️ Validate Departure Time
+    df['expected_dep_time'] = (df['sched_dep_time'] + df['dep_delay']).astype('Int64')
+    df['dep_time_mismatch'] = df['dep_time'] != df['expected_dep_time']
+
+    # 2️ Validate Arrival Time
+    df['expected_arr_time'] = (df['sched_arr_time'] + df['arr_delay']).astype('Int64')
+    df['arr_time_mismatch'] = df['arr_time'] != df['expected_arr_time']
+
+    # 3️ Validate Air Time Consistency
+    df['expected_air_time'] = (df['arr_time'] - df['dep_time']).astype('Int64')
+    df['air_time_mismatch'] = df['air_time'] != df['expected_air_time']
+
+
+
+    # 4️ Extract Rows with Inconsistencies
+    inconsistent_flights = df[(df['dep_time_mismatch']) | (df['arr_time_mismatch']) | (df['air_time_mismatch'])]
+
+    if inconsistent_flights.empty:
+        print("All flights have consistent departure and arrival times.")
+    else:
+        print(f"Found {len(inconsistent_flights)} inconsistent flights.")
+        print(inconsistent_flights[['flight_rowid', 'dep_time', 'sched_dep_time', 'dep_delay',
+                                    'expected_dep_time', 'arr_time', 'sched_arr_time', 'arr_delay',
+                                    'expected_arr_time', 'air_time', 'expected_air_time']])
+
+    return inconsistent_flights
+
+
 
 #Create a column for local arrival time considering time zone differences
 def compute_local_arrival_time(conn):
