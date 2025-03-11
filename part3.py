@@ -3,6 +3,7 @@ import part1
 import pandas as pd
 
 from matplotlib import pyplot as plt
+import plotly.graph_objects as go
 
 
 
@@ -54,13 +55,151 @@ def get_nyc_airports():
 
     return df
 
-def visualize_flight_destinations(conn, month, day, airport):
-    """Generate a map of all destinations from a given NYC airport on a specific day."""
-    pass
 
-def get_flight_statistics():
-    """Return statistics such as flight count, unique destinations, and most frequent destination."""
-    pass
+def visualize_flight_destinations(month_x, day_x, nyc_airport):
+    """Generate a map of all destinations from a given NYC airport on a specific day, with airline info as hover text."""
+    
+
+    conn = sqlite3.connect('flights_database.db')
+    cursor = conn.cursor()
+
+
+    query = """
+    SELECT flights.dest, flights.carrier, 
+           airports.lat AS dest_lat, airports.lon AS dest_lon, 
+           airlines.name AS airline_name
+    FROM flights
+    JOIN airports ON flights.dest = airports.faa
+    JOIN airlines ON flights.carrier = airlines.carrier
+    WHERE flights.month = ? AND flights.day = ? AND flights.origin = ?;
+    """
+
+    df = pd.read_sql_query(query, conn, params=(month_x, day_x, nyc_airport))
+
+    # Get origin airport coordinates
+    origin_query = "SELECT lat, lon FROM airports WHERE faa = ?;"
+    origin_data = pd.read_sql_query(origin_query, conn, params=(nyc_airport,))
+
+    # Close connection
+    conn.close()
+
+    # Check if flights exist
+    if df.empty:
+        print(f"No flights found from {nyc_airport} on {month_x}/{day_x}")
+        return
+    
+    if origin_data.empty: # also check if theere areany flights for that nyc airport
+        print(f"Origin airport {nyc_airport} not found in airports table.")
+        return
+    
+    start_lat = origin_data["lat"].iloc[0]
+    start_lon = origin_data["lon"].iloc[0]
+
+    # Assign unique colors to airlines, for better visibility
+    airlines_colors = {airline: f"rgb({i*30 % 255}, {(i*60) % 255}, {(i*90) % 255})" for i, airline in enumerate(df["airline_name"].unique())}
+
+
+    fig = go.Figure()
+
+    fig.add_trace(go.Scattergeo(
+        lon=[start_lon], lat=[start_lat],
+        mode='markers',
+        name=nyc_airport,
+        marker=dict(color='red', size=10),
+        text=f"Origin: {nyc_airport}",
+        hoverinfo="text",
+        showlegend=True
+    ))
+
+    # Plot destinations and flight paths with airline info
+    for _, row in df.iterrows():
+        airline_info = f"Flight to {row['dest']}<br>Airline: {row['airline_name']}" #
+        color = airlines_colors[row["airline_name"]]
+
+        fig.add_trace(go.Scattergeo(
+            lon=[row["dest_lon"]],
+            lat=[row["dest_lat"]],
+            mode='markers',
+            name=row["airline_name"],  # Airline name in the legend
+            marker=dict(color=color, size=8),
+            text=airline_info, 
+            hoverinfo="text",
+            showlegend=True
+        ))
+
+        fig.add_trace(go.Scattergeo(
+            lon=[start_lon, row["dest_lon"]],
+            lat=[start_lat, row["dest_lat"]],
+            mode='lines',
+            line=dict(color=color, width=1),
+            text=airline_info, 
+            hoverinfo="text",
+            showlegend=False
+        ))
+
+
+    fig.update_layout(
+        title=f"Flight Destinations from {nyc_airport} on {month_x}/{day_x}", # title using airport and date
+        geo=dict(projection_type="natural earth", showcoastlines=True),
+        legend_title="Airlines"
+    )
+
+
+    fig.show()
+
+
+def get_flight_statistics(month_x, day_x, nyc_airport):
+    """Retrieve flight statistics for a given date and airport in NYC."""
+
+
+    conn = sqlite3.connect('flights_database.db')
+    cursor = conn.cursor()
+
+
+    query = f'''
+    SELECT dest, carrier, dep_delay, distance
+    FROM flights
+    WHERE month = {month_x} AND day = {day_x} AND origin = '{nyc_airport}';
+    '''
+
+    cursor.execute(query)
+    flights = pd.DataFrame(cursor.fetchall(), columns=[x[0] for x in cursor.description])
+
+    # Close connection
+    conn.close()
+
+    if flights.empty:
+        print(f"No flight data available for {nyc_airport} on {month_x}/{day_x}")
+        return
+    
+    # Number of flights and unique destinations
+    total_flights = len(flights)
+    unique_destinations = flights["dest"].nunique()
+
+    # Most and least visited destinations
+    most_visited = flights["dest"].value_counts().idxmax()
+    least_visited = flights["dest"].value_counts().idxmin()
+
+
+    # Find furthiest and closest destinations
+    furthest_dest = flights.loc[flights["distance"].idxmax(), "dest"]
+    closest_dest = flights.loc[flights["distance"].idxmin(), "dest"]
+
+    # Busiest airline
+    busiest_airline = flights["carrier"].value_counts().idxmax()
+
+    # Compile results in a dicttionarry
+    stats = {
+        "Total Flights": total_flights,
+        "Unique Destinations": unique_destinations,
+        "Most Visited Destination": most_visited,
+        "Least Visited Destination": least_visited,
+        "Busiest Airline": busiest_airline,
+        "Furthest Destination": furthest_dest,
+        "Closest Destination": closest_dest
+    }
+
+    return stats #Returns the dictionary with the statistics for the day and airport
 
 
 '''
@@ -230,18 +369,207 @@ def analyze_distance_vs_arrival_delay():
     
     pass
 
-def compute_average_plane_speeds():
-    """Compute and update the average speed for each plane model in the database."""
-    pass
 
-def compute_flight_directions():
-    """Determine the flight direction for each airport from NYC."""
-    pass
+def calculate_average_plane_speed():
+    """Calculate the average speed (in mph) for each plane model.
+    and update the speed column in the planes table."""
 
-def compute_wind_effect_on_flights():
-    """Compute the inner product of flight direction and wind speed for given flights."""
-    pass
+    
+    conn = sqlite3.connect('flights_database.db')
 
-def analyze_wind_effect_on_air_time():
-    """Analyze if the wind effect has a significant impact on air time."""
-    pass
+    flights_df = pd.read_sql_query("SELECT tailnum, distance, air_time FROM flights WHERE air_time > 0", conn)
+    planes_df = pd.read_sql_query("SELECT tailnum, model, speed FROM planes", conn)
+
+    # Compute the average speed per tailnum (aircraft)
+    flights_df["speed"] = flights_df["distance"] / (flights_df["air_time"] / 60)  # Convert air_time to hours
+    avg_speeds = round((flights_df.groupby("tailnum")["speed"].mean().reset_index()), 4)  # Average speed per tailnum and round to 4dp
+
+    # Merge the new speeds with planes DataFrame
+    planes_df = planes_df.merge(avg_speeds, on="tailnum", how="left")
+
+    # # Rename columns correctly, after merging the tables the columns came out as speed_y(the average speed calculated), speed_x(old speed(0))
+    planes_df.rename(columns={"speed_y": "speed", "speed_x": "old_speed"}, inplace=True)
+
+    # Drop the old speed column 
+    planes_df.drop(columns=["old_speed"], inplace=True)
+
+    # Remove rows where speed couldn't be calculated
+    planes_df.dropna(subset=["speed"], inplace=True)
+
+    #  Update the database with the computed speeds
+    for index, row in planes_df.iterrows():
+        conn.execute("UPDATE planes SET speed = ? WHERE tailnum = ?", (row["speed"], row["tailnum"]))
+
+    # Commit changes and close connection
+    conn.commit()
+    conn.close()
+
+    print("Speed column updated successfully in planes table using Pandas.")
+
+
+
+def compute_flight_directions(conn):
+    """
+    Determine the flight direction (direction_x, direction_y) for each flight
+    """
+
+    cursor = conn.cursor()
+    try:
+        cursor.execute("ALTER TABLE flights ADD COLUMN direction_x REAL")
+    except sqlite3.OperationalError:
+        pass  
+
+    try:
+        cursor.execute("ALTER TABLE flights ADD COLUMN direction_y REAL")
+    except sqlite3.OperationalError:
+        pass  
+
+    # 1) JOIN flights->airports (origin) and flights->airports (dest)
+    query = """
+        SELECT 
+            f.rowid AS flight_rowid,
+            f.origin, 
+            f.dest,
+            a1.lat AS origin_lat,
+            a1.lon AS origin_lon,
+            a2.lat AS dest_lat,
+            a2.lon AS dest_lon
+        FROM flights AS f
+        JOIN airports a1
+          ON f.origin = a1.faa
+        JOIN airports a2
+          ON f.dest   = a2.faa
+    """
+    df = pd.read_sql_query(query, conn)
+    
+    if df.empty:
+        print("No flights/airports data found. Check your joins or data.")
+        return df
+    
+    # 2) Compute direction as simple difference in lon and lat
+
+    df['direction_x'] = df['dest_lon'] - df['origin_lon']
+    df['direction_y'] = df['dest_lat'] - df['origin_lat']
+    
+    # 3) Update 'flights' table with direction_x, direction_y 
+    update_data = df[['direction_x','direction_y','flight_rowid']].values.tolist()
+    
+    try:
+        cursor.executemany("""
+            UPDATE flights
+               SET direction_x = ?,
+                   direction_y = ?
+             WHERE rowid = ?
+        """, update_data)
+        conn.commit()
+        print("Updated flights.direction_x, flights.direction_y successfully.")
+    except sqlite3.OperationalError as e:
+        print("Could not update flights table with direction_x/direction_y. Check if columns exist.")
+        print("Error:", e)
+    finally:
+        cursor.close()
+
+    return df
+
+def compute_wind_effect_on_flights(conn):
+
+    cursor = conn.cursor()
+    try:
+        cursor.execute("ALTER TABLE flights ADD COLUMN wind_effect REAL")
+    except sqlite3.OperationalError:
+        pass  
+
+    query = """
+        SELECT
+            f.rowid AS flight_rowid,
+            f.origin,
+            f.dest,
+            f.direction_x,
+            f.direction_y,
+            -- no more origin_lon, dest_lon, etc. needed 
+            w.wind_speed,
+            w.wind_dir
+        FROM flights AS f
+        JOIN weather AS w
+          ON f.origin = w.origin
+         AND f.year   = w.year
+         AND f.month  = w.month
+         AND f.day    = w.day
+         AND f.hour   = w.hour
+    """
+
+    df = pd.read_sql_query(query, conn)
+    if df.empty:
+        print("No joined weather/flight data found. Check your JOIN conditions.")
+        return df
+
+    # Convert wind_dir to radians
+    df['wind_dir_radians'] = np.radians(df['wind_dir'])
+    df['wind_x'] = df['wind_speed'] * np.sin(df['wind_dir_radians'])
+    df['wind_y'] = df['wind_speed'] * np.cos(df['wind_dir_radians'])
+
+    # Dot product with direction_x, direction_y
+    df['wind_effect'] = df['direction_x'] * df['wind_x'] + df['direction_y'] * df['wind_y']
+
+    print(df[['flight_rowid','origin','dest','wind_speed','wind_dir','wind_effect']].head())
+
+    update_data = df[['wind_effect','flight_rowid']].values.tolist()
+    try:
+        cursor.executemany("UPDATE flights SET wind_effect = ? WHERE rowid = ?", update_data)
+        conn.commit()
+        print("Wind effect computed and stored in flights.wind_effect.")
+    except sqlite3.OperationalError as e:
+        print("Could not update flights table with wind_effect.")
+        print("Error:", e)
+    finally:
+        cursor.close()
+
+    return df
+
+def analyze_wind_effect_on_air_time(conn):
+    """
+    Analyze if the wind effect (dot product between flight direction and wind vector)
+    has a relationship with air time. Specifically, we check whether flights with
+    a positive wind effect (tailwind) differ in average air time from those with
+    a negative wind effect (headwind).
+    """
+
+    # 1) Query the flights table for wind_effect, air_time
+    query = """
+        SELECT wind_effect, air_time
+          FROM flights
+         WHERE wind_effect IS NOT NULL
+           AND air_time    IS NOT NULL
+    """
+    df = pd.read_sql_query(query, conn)
+
+    # If the table or columns are empty, just return
+    if df.empty:
+        print("No data found with both wind_effect and air_time.")
+        return
+
+       # 2) Split the DataFrame into positive and negative subsets
+    df_pos = df[df['wind_effect'] >= 0]
+    df_neg = df[df['wind_effect'] < 0]
+
+    # 3) QQ-plots 
+    fig, axs = plt.subplots(1, 2, figsize=(12, 6), sharey=True)
+    fig.suptitle('Wind Effect vs. Air Time (Tailwind vs. Headwind)')
+
+    # --- PLOT 1: Positive (Tailwind) ---
+    axs[0].scatter(df_pos['wind_effect'], df_pos['air_time'],
+                   color='blue', alpha=0.5)
+    axs[0].set_title('Positive Wind Effect (Tailwind)')
+    axs[0].set_xlabel('Wind Effect (Dot Product)')
+    axs[0].set_ylabel('Air Time (minutes)')
+    axs[0].grid(True)
+
+    # --- PLOT 2: Negative (Headwind) ---
+    axs[1].scatter(df_neg['wind_effect'], df_neg['air_time'],
+                   color='red', alpha=0.5)
+    axs[1].set_title('Negative Wind Effect (Headwind)')
+    axs[1].set_xlabel('Wind Effect (Dot Product)')
+    axs[1].grid(True)
+
+    plt.tight_layout()
+    plt.show()
