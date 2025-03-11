@@ -5,10 +5,10 @@
 2. (Done) For each flight, the origin from which it leaves can be fount in the variable origin in the table . Identify all different airports in NYC from
 which flights depart and save a contain the information about those
 airports from airports.
-3. (Dion) Write a function that takes a month and day and an airport in NYC as input,
+3. (Done) Write a function that takes a month and day and an airport in NYC as input,
 and produces a figure similar to the one from part 1 containing all destinations
 of flights on that day.
-4. (Dion) Also write a function that returns statistics for that day, i.e. how many flights,
+4. (Done) Also write a function that returns statistics for that day, i.e. how many flights,
 how many unique destinations, which destination is visited most often, etc.
 5. (Done) Write a function that, given a departing airport and an arriving airport, returns a dict describing how many times each plane type was used for that flight
 trajectory. For this task you will need to match the columns to type
@@ -22,7 +22,7 @@ airplane manufacturers with planes departing to this destination. For this task,
 you have to combine data from flights and planes.
 9. (Atish) Investigate whether there is a relationship between the distance of a flight and
 the arrival delay time.
-10. (Dion) Group the table flights by plane model using the tailnum . For each model,
+10. (Done) Group the table flights by plane model using the tailnum . For each model,
 compute the average speed by taking the average of the distance divided by flight time over all flights of that model. Use this information to fill the column speed
 in the table planes .
 11. (Julie) The wind direction is given in weather in degrees. Compute for each airport the direction the plane follows when flying there from New York.
