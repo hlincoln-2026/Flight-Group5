@@ -1,5 +1,6 @@
 import part1
 import part3
+import part4
 import sqlite3
 import pandas as pd
 

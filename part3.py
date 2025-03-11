@@ -135,15 +135,17 @@ def average_departure_delay():
         name = airlines_df.loc[carrier] #Gets the full airline name by the carrier index
         delay_dict[name[1]] = average #Adds the carrier to the dictionary and sets its value to the average delay time
 
-    #Sets up pyplot
-    plt.figure(figsize=(7,7))
-    plt.bar(delay_dict.keys(), delay_dict.values()) #Sets the x-axis as the keys of the dictonary(carrier names) and y-axis as the values(averages)
-    plt.xlabel('Airline Carriers')
-    plt.ylabel('Average Delay Time')
-    plt.title('Delay Times for Airlines')
-    plt.xticks(rotation='vertical')
-    plt.subplots_adjust(bottom = 0.3) 
-    plt.show()
+    # #Sets up pyplot
+    # plt.figure(figsize=(7,7))
+    # plt.bar(delay_dict.keys(), delay_dict.values()) #Sets the x-axis as the keys of the dictonary(carrier names) and y-axis as the values(averages)
+    # plt.xlabel('Airline Carriers')
+    # plt.ylabel('Average Delay Time')
+    # plt.title('Delay Times for Airlines')
+    # plt.xticks(rotation='vertical')
+    # plt.subplots_adjust(bottom = 0.3) 
+    # plt.show()
+
+    return delay_dict
 
     
 '''
