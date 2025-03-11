@@ -3,6 +3,7 @@ import part1
 import pandas as pd
 
 from matplotlib import pyplot as plt
+import plotly.graph_objects as go
 
 
 
@@ -54,13 +55,151 @@ def get_nyc_airports():
 
     return df
 
-def visualize_flight_destinations(conn, month, day, airport):
-    """Generate a map of all destinations from a given NYC airport on a specific day."""
-    pass
 
-def get_flight_statistics():
-    """Return statistics such as flight count, unique destinations, and most frequent destination."""
-    pass
+def visualize_flight_destinations(month_x, day_x, nyc_airport):
+    """Generate a map of all destinations from a given NYC airport on a specific day, with airline info as hover text."""
+    
+
+    conn = sqlite3.connect('flights_database.db')
+    cursor = conn.cursor()
+
+
+    query = """
+    SELECT flights.dest, flights.carrier, 
+           airports.lat AS dest_lat, airports.lon AS dest_lon, 
+           airlines.name AS airline_name
+    FROM flights
+    JOIN airports ON flights.dest = airports.faa
+    JOIN airlines ON flights.carrier = airlines.carrier
+    WHERE flights.month = ? AND flights.day = ? AND flights.origin = ?;
+    """
+
+    df = pd.read_sql_query(query, conn, params=(month_x, day_x, nyc_airport))
+
+    # Get origin airport coordinates
+    origin_query = "SELECT lat, lon FROM airports WHERE faa = ?;"
+    origin_data = pd.read_sql_query(origin_query, conn, params=(nyc_airport,))
+
+    # Close connection
+    conn.close()
+
+    # Check if flights exist
+    if df.empty:
+        print(f"No flights found from {nyc_airport} on {month_x}/{day_x}")
+        return
+    
+    if origin_data.empty: # also check if theere areany flights for that nyc airport
+        print(f"Origin airport {nyc_airport} not found in airports table.")
+        return
+    
+    start_lat = origin_data["lat"].iloc[0]
+    start_lon = origin_data["lon"].iloc[0]
+
+    # Assign unique colors to airlines, for better visibility
+    airlines_colors = {airline: f"rgb({i*30 % 255}, {(i*60) % 255}, {(i*90) % 255})" for i, airline in enumerate(df["airline_name"].unique())}
+
+
+    fig = go.Figure()
+
+    fig.add_trace(go.Scattergeo(
+        lon=[start_lon], lat=[start_lat],
+        mode='markers',
+        name=nyc_airport,
+        marker=dict(color='red', size=10),
+        text=f"Origin: {nyc_airport}",
+        hoverinfo="text",
+        showlegend=True
+    ))
+
+    # Plot destinations and flight paths with airline info
+    for _, row in df.iterrows():
+        airline_info = f"Flight to {row['dest']}<br>Airline: {row['airline_name']}" #
+        color = airlines_colors[row["airline_name"]]
+
+        fig.add_trace(go.Scattergeo(
+            lon=[row["dest_lon"]],
+            lat=[row["dest_lat"]],
+            mode='markers',
+            name=row["airline_name"],  # Airline name in the legend
+            marker=dict(color=color, size=8),
+            text=airline_info, 
+            hoverinfo="text",
+            showlegend=True
+        ))
+
+        fig.add_trace(go.Scattergeo(
+            lon=[start_lon, row["dest_lon"]],
+            lat=[start_lat, row["dest_lat"]],
+            mode='lines',
+            line=dict(color=color, width=1),
+            text=airline_info, 
+            hoverinfo="text",
+            showlegend=False
+        ))
+
+
+    fig.update_layout(
+        title=f"Flight Destinations from {nyc_airport} on {month_x}/{day_x}", # title using airport and date
+        geo=dict(projection_type="natural earth", showcoastlines=True),
+        legend_title="Airlines"
+    )
+
+
+    fig.show()
+
+
+def get_flight_statistics(month_x, day_x, nyc_airport):
+    """Retrieve flight statistics for a given date and airport in NYC."""
+
+
+    conn = sqlite3.connect('flights_database.db')
+    cursor = conn.cursor()
+
+
+    query = f'''
+    SELECT dest, carrier, dep_delay, distance
+    FROM flights
+    WHERE month = {month_x} AND day = {day_x} AND origin = '{nyc_airport}';
+    '''
+
+    cursor.execute(query)
+    flights = pd.DataFrame(cursor.fetchall(), columns=[x[0] for x in cursor.description])
+
+    # Close connection
+    conn.close()
+
+    if flights.empty:
+        print(f"No flight data available for {nyc_airport} on {month_x}/{day_x}")
+        return
+    
+    # Number of flights and unique destinations
+    total_flights = len(flights)
+    unique_destinations = flights["dest"].nunique()
+
+    # Most and least visited destinations
+    most_visited = flights["dest"].value_counts().idxmax()
+    least_visited = flights["dest"].value_counts().idxmin()
+
+
+    # Find furthiest and closest destinations
+    furthest_dest = flights.loc[flights["distance"].idxmax(), "dest"]
+    closest_dest = flights.loc[flights["distance"].idxmin(), "dest"]
+
+    # Busiest airline
+    busiest_airline = flights["carrier"].value_counts().idxmax()
+
+    # Compile results in a dicttionarry
+    stats = {
+        "Total Flights": total_flights,
+        "Unique Destinations": unique_destinations,
+        "Most Visited Destination": most_visited,
+        "Least Visited Destination": least_visited,
+        "Busiest Airline": busiest_airline,
+        "Furthest Destination": furthest_dest,
+        "Closest Destination": closest_dest
+    }
+
+    return stats #Returns the dictionary with the statistics for the day and airport
 
 
 '''
@@ -228,9 +367,44 @@ def analyze_distance_vs_arrival_delay():
     
     pass
 
-def compute_average_plane_speeds():
-    """Compute and update the average speed for each plane model in the database."""
-    pass
+
+def calculate_average_plane_speed():
+    """Calculate the average speed (in mph) for each plane model.
+    and update the speed column in the planes table."""
+
+    
+    conn = sqlite3.connect('flights_database.db')
+
+    flights_df = pd.read_sql_query("SELECT tailnum, distance, air_time FROM flights WHERE air_time > 0", conn)
+    planes_df = pd.read_sql_query("SELECT tailnum, model, speed FROM planes", conn)
+
+    # Compute the average speed per tailnum (aircraft)
+    flights_df["speed"] = flights_df["distance"] / (flights_df["air_time"] / 60)  # Convert air_time to hours
+    avg_speeds = round((flights_df.groupby("tailnum")["speed"].mean().reset_index()), 4)  # Average speed per tailnum and round to 4dp
+
+    # Merge the new speeds with planes DataFrame
+    planes_df = planes_df.merge(avg_speeds, on="tailnum", how="left")
+
+    # # Rename columns correctly, after merging the tables the columns came out as speed_y(the average speed calculated), speed_x(old speed(0))
+    planes_df.rename(columns={"speed_y": "speed", "speed_x": "old_speed"}, inplace=True)
+
+    # Drop the old speed column 
+    planes_df.drop(columns=["old_speed"], inplace=True)
+
+    # Remove rows where speed couldn't be calculated
+    planes_df.dropna(subset=["speed"], inplace=True)
+
+    #  Update the database with the computed speeds
+    for index, row in planes_df.iterrows():
+        conn.execute("UPDATE planes SET speed = ? WHERE tailnum = ?", (row["speed"], row["tailnum"]))
+
+    # Commit changes and close connection
+    conn.commit()
+    conn.close()
+
+    print("Speed column updated successfully in planes table using Pandas.")
+
+
 
 def compute_flight_directions(conn):
     """
