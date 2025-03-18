@@ -21,7 +21,7 @@ def all_airports(df):
         projection='natural earth',
         color='tzone'
     )
-    fig.show()
+    return fig
 
 
 # Display all international flights
@@ -60,13 +60,14 @@ def only_usa(df):
         lat='lat',
         lon='lon',
         hover_name='name',
-        color='alt'
+        color='tzone'
     )
 
     fig.update_layout(
             geo_scope='usa',
         )
-    fig.show()
+    
+    return fig
 
 
 # Display all flight paths from airports list
@@ -110,11 +111,7 @@ def flight_paths(airports, df):
             line=dict(color='green'),
             showlegend=False
         ))
-    fig.show()
-    
-    fig = go.Figure(data=[map])
-
-    fig.show()
+    return fig
 
 
 # Calculates the Euclidean Distance between two locations
