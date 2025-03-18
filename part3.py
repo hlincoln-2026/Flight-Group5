@@ -5,7 +5,19 @@ import pandas as pd
 from matplotlib import pyplot as plt
 import plotly.graph_objects as go
 
+def get_df_from_database(query):
+    conn = sqlite3.connect('flights_database.db')
+    cursor = conn.cursor()
+    cursor.execute(query)
+    df = pd.DataFrame(cursor.fetchall(), columns = [x[0] for x in cursor.description])
+    return df
 
+def get_faa(name):
+    query = f'SELECT faa,name FROM airports'
+    df = get_df_from_database(query)
+
+    row = df.loc[df['name'] == name, 'faa'].item()
+    return row
 
 def verify_computed_distance(conn, csv_path="geodesic_distances.csv"):
     """
@@ -40,20 +52,25 @@ def verify_computed_distance(conn, csv_path="geodesic_distances.csv"):
 
     return merged_df.head()
 
+def get_nyc_names(codes):
+    query = f'SELECT name, faa FROM airports'
+    df = get_df_from_database(query)
+
+    df = df[df['faa'].isin(codes)]
+    return list(df['name'])
+
 def get_nyc_airports():
     """Retrieve all NYC airports from the database."""
-    nyc_lst = ['FOK','ISP','FRG','JFK','LGA','HPN','MGJ','SWF','BGM','ELM','ITH','JHW',
-               'DKK','BUF','IAG','ROC','SYC','RME','ALB','SCH','GFL','ART','LKP','SLK','PBG','MSS','OGS']
+    
     
     conn = sqlite3.connect('flights_database.db')
     cursor = conn.cursor()
-    cursor.execute(f'SELECT * FROM airports')
+    cursor.execute(f'SELECT origin FROM flights')
 
     df = pd.DataFrame(cursor.fetchall(), columns = [x[0] for x in cursor.description])
 
-    df = df[df['faa'].isin(nyc_lst)]
-
-    return df
+    airport_set = set(df['origin'])
+    return get_nyc_names(airport_set)
 
 
 def visualize_flight_destinations(month_x, day_x, nyc_airport):
