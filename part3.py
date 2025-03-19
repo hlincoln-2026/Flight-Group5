@@ -1,14 +1,8 @@
 import sqlite3
-import numpy as np
+import part1
 import pandas as pd
-<<<<<<< HEAD
-
 from matplotlib import pyplot as plt
 import plotly.graph_objects as go
-=======
-import part1
-import matplotlib.pyplot as plt
->>>>>>> ccb219f (trial1)
 
 def get_df_from_database(query):
     conn = sqlite3.connect('flights_database.db')
@@ -24,9 +18,38 @@ def get_faa(name):
     row = df.loc[df['name'] == name, 'faa'].item()
     return row
 
-def verify_computed_distances():
-    """Verify that the computed distances match the distances in the flights table."""
-    pass
+def verify_computed_distance(conn, csv_path="geodesic_distances.csv"):
+    """
+    Compare the flight distances stored in the database with geodesic distances from a CSV file.
+    
+    Params:
+    - conn: connection to the SQLite database.
+    - csv_path (str): Path to the geodesic distances CSV file.
+    
+    Returns:
+    - merged_df (DataFrame): DataFrame containing flight distances and geodesic distances.
+    """
+    
+    flights_df = pd.read_sql_query("SELECT origin, dest, distance FROM flights;", conn)
+    
+    # Load the geodesic distances from CSV
+    geodesic_df = pd.read_csv(csv_path)
+
+    # Rename columns to match for easier merging
+    geodesic_df.rename(columns={"airport1": "origin", "airport2": "dest", "distance_m": "geodesic_distance"}, inplace=True)
+
+    # Merge both DataFrames on origin and destination
+    merged_df = flights_df.merge(geodesic_df, on=["origin", "dest"], how="left")
+
+    # Compute the difference between actual and computed distances
+    merged_df["difference"] = merged_df["distance"] - merged_df["geodesic_distance"]
+
+    # Save results to CSV
+    merged_df.to_csv("distance_comparison.csv", index=False)
+
+    print("Comparison complete! Check 'distance_comparison.csv' for full results.")
+
+    return merged_df.head()
 
 def get_nyc_names(codes):
     query = f'SELECT name, faa FROM airports'
@@ -37,7 +60,6 @@ def get_nyc_names(codes):
 
 def get_nyc_airports():
     """Retrieve all NYC airports from the database."""
-<<<<<<< HEAD
     
     
     conn = sqlite3.connect('flights_database.db')
@@ -47,19 +69,13 @@ def get_nyc_airports():
     df = pd.DataFrame(cursor.fetchall(), columns = [x[0] for x in cursor.description])
 
     airport_set = set(df['origin'])
+    conn.close()
     return get_nyc_names(airport_set)
 
 
 def visualize_flight_destinations(month_x, day_x, nyc_airport):
     """Generate a map of all destinations from a given NYC airport on a specific day, with airline info as hover text."""
     
-=======
-    pass
-
-def visualize_flight_destinations():
-    """Generate a map of all destinations from a given NYC airport on a specific day."""
-    pass
->>>>>>> ccb219f (trial1)
 
     conn = sqlite3.connect('flights_database.db')
     cursor = conn.cursor()
@@ -202,13 +218,49 @@ def get_flight_statistics(month_x, day_x, nyc_airport):
 
     return stats #Returns the dictionary with the statistics for the day and airport
 
-def get_airplane_usage():
+
+'''
+Parameters:
+    departure -> faa code for airport the flight is departing from
+    arrival -> faa code for the airport the flight will be arriving at
+'''
+def get_airplane_usage(departure, arrival):
     """Return a dictionary describing the number of times each plane type was used for a specific route."""
-    pass
+
+    plane_dict = {'Fixed wing single engine': 0, 'Rotorcraft': 0, 'Fixed wing multi engine': 0}
+
+    conn = sqlite3.connect('flights_database.db')
+    cursor = conn.cursor()
+
+    query1 = f'SELECT tailnum,origin,dest FROM flights'
+    query2 = f'SELECT tailnum,type FROM planes'
+
+    cursor.execute(query1)
+    flights = pd.DataFrame(cursor.fetchall(), columns = [x[0] for x in cursor.description]) #Creates dataframe with data from flights table
+
+    cursor.execute(query2)
+    planes = pd.DataFrame(cursor.fetchall(), columns = [x[0] for x in cursor.description]) #Creates dataframe with data from planes table
+
+    planes_lst = list(planes['tailnum']) #Makes list of all the 'tailnum' column from planes dataframe
+
+    #Filters data in flights dataframe to only include flights from given origin to destination
+    flights = flights[flights['origin'] == departure]
+    flights = flights[flights['dest'] == arrival]
+
+    #Iterates through each tailnum of the the filtered flights dataframe
+    for flight in list(flights['tailnum']):
+        #Increases the plane type counter in the dictionary if the flight has a tailnum in the planes dataframe
+        if flight in planes_lst:
+            plane_type = planes['type'].loc[planes_lst.index(flight)]
+            plane_dict[plane_type] += 1
+
+
+    return plane_dict #Returns the dictionary with the count of each plane type
+
+    
 
 def average_departure_delay():
     """Compute and visualize the average departure delay per airline."""
-<<<<<<< HEAD
 
     delay_dict = {} #Empty dictionary to hold delay times for each airline
 
@@ -334,31 +386,11 @@ def analyze_distance_vs_arrival_delay():
     
     pass
 
-=======
-    pass
-
-def delayed_flights_by_destination():
-    """Return the number of delayed flights to a given destination within a specified time range."""
-    pass
-
-def top_airplane_manufacturers():
-    """Return the top 5 airplane manufacturers with planes departing to the specified destination."""
-    pass
-
-# def analyze_distance_vs_arrival_delay():
-#     """Investigate the relationship between flight distance and arrival delay time."""
-#     pass
-
-def compute_average_plane_speeds():
-    """Compute and update the average speed for each plane model in the database."""
-    pass
->>>>>>> ccb219f (trial1)
 
 def calculate_average_plane_speed():
     """Calculate the average speed (in mph) for each plane model.
     and update the speed column in the planes table."""
 
-<<<<<<< HEAD
     
     conn = sqlite3.connect('flights_database.db')
 
@@ -484,89 +516,15 @@ def compute_wind_effect_on_flights(conn):
     """
 
     df = pd.read_sql_query(query, conn)
-=======
-def compute_wind_effect_on_flights(conn):
-    
-
- import sqlite3
-import pandas as pd
-import numpy as np
-import math
-
-def compute_wind_effect_on_flights(conn):
-    """
-    Compute the inner product (dot product) between flight direction and wind vectors
-    derived from wind_speed and wind_dir (in degrees) from the 'weather' table.
-
-    Assumptions:
-      - flights(origin, dest, [possibly date/time columns])
-      - airports(faa, lat, lon)
-      - weather(airport or station, wind_speed, wind_dir, [possibly date/time columns])
-      - wind_dir is the direction wind is blowing FROM, in degrees clockwise from north.
-
-    You will need to adapt the JOIN logic below to match your actual table/column names
-    and your database's keys. For example, you might need to join on flight date and time.
-    """
-
-    # 1) Pull all needed data from the DB in one query
-    #    Here, we assume 'weather.airport = flights.origin'. 
-    #    Often you'll also have date/time constraints, e.g. (flights.date = weather.date).
-    query = """
-        SELECT
-            f.rowid AS flight_rowid,
-            f.origin, 
-            a1.lat AS origin_lat, 
-            a1.lon AS origin_lon,
-            f.dest, 
-            a2.lat AS dest_lat, 
-            a2.lon AS dest_lon,
-            w.wind_speed,
-            w.wind_dir
-        FROM flights AS f
-        JOIN airports AS a1
-            ON f.origin = a1.faa
-        JOIN airports AS a2
-            ON f.dest   = a2.faa
-        JOIN weather AS w
-            ON f.origin = w.airport
-            -- Possibly also: AND f.date = w.date
-            -- Or some other condition to match time-of-flight to time-of-weather
-    """
-
-    df = pd.read_sql_query(query, conn)
-
->>>>>>> ccb219f (trial1)
     if df.empty:
         print("No joined weather/flight data found. Check your JOIN conditions.")
         return df
 
-<<<<<<< HEAD
     # Convert wind_dir to radians
-=======
-    # 2) Compute the flight direction (destination - origin) in (lon, lat)
-    #    This is a simplistic approach in degrees, not distances. 
-    #    If you prefer a geodesic approach, you'd do something more elaborate.
-    df['direction_x'] = df['dest_lon'] - df['origin_lon']
-    df['direction_y'] = df['dest_lat'] - df['origin_lat']
-
-    # 3) Convert wind_dir, wind_speed to Cartesian components (wind_x, wind_y).
-    #
-    #    By meteorological convention, wind_dir = 0 means wind blowing FROM the north 
-    #    (i.e., traveling southward). If you want to keep that convention, a quick approach is:
-    #
-    #       wind_x = wind_speed * sin(radians(wind_dir))
-    #       wind_y = wind_speed * cos(radians(wind_dir))
-    #
-    #    But note that "wind is from 0 degrees" means it's going toward 180° in math sense.
-    #    If you find your signs reversed, you may need to add a negative or do (dir + 180) mod 360.
-    #    This depends on how your assignment wants "wind effect" interpreted.
-
->>>>>>> ccb219f (trial1)
     df['wind_dir_radians'] = np.radians(df['wind_dir'])
     df['wind_x'] = df['wind_speed'] * np.sin(df['wind_dir_radians'])
     df['wind_y'] = df['wind_speed'] * np.cos(df['wind_dir_radians'])
 
-<<<<<<< HEAD
     # Dot product with direction_x, direction_y
     df['wind_effect'] = df['direction_x'] * df['wind_x'] + df['direction_y'] * df['wind_y']
 
@@ -579,39 +537,12 @@ def compute_wind_effect_on_flights(conn):
         print("Wind effect computed and stored in flights.wind_effect.")
     except sqlite3.OperationalError as e:
         print("Could not update flights table with wind_effect.")
-=======
-    # 4) Dot product: flight direction dot wind vector
-    df['wind_effect'] = df['direction_x'] * df['wind_x'] + df['direction_y'] * df['wind_y']
-
-    # 5) Print a sample
-    print(df[['flight_rowid','origin','dest','wind_speed','wind_dir','wind_effect']].head())
-
-    # If you want to store wind_effect in 'flights' table, you must have a 'wind_effect' column there:
-    # For example:
-    #
-    #   ALTER TABLE flights ADD COLUMN wind_effect REAL;
-    #
-    # Then do an UPDATE using rowid (or your primary key):
-    update_data = df[['wind_effect','flight_rowid']].values.tolist()
-
-    cursor = conn.cursor()
-    try:
-        cursor.executemany(
-            "UPDATE flights SET wind_effect = ? WHERE rowid = ?",
-            update_data
-        )
-        conn.commit()
-        print("Wind effect computed and stored in flights.wind_effect.")
-    except sqlite3.OperationalError as e:
-        print("Could not update flights table with wind_effect. Check if 'wind_effect' column exists.")
->>>>>>> ccb219f (trial1)
         print("Error:", e)
     finally:
         cursor.close()
 
     return df
 
-<<<<<<< HEAD
 def analyze_wind_effect_on_air_time(conn):
     """
     Analyze if the wind effect (dot product between flight direction and wind vector)
@@ -659,49 +590,3 @@ def analyze_wind_effect_on_air_time(conn):
 
     plt.tight_layout()
     plt.show()
-=======
-
-
-def analyze_wind_effect_on_air_time(conn):
-    """
-    Analyze whether the sign or magnitude of the wind_effect (dot product) 
-    relates to air_time.
-    
-    Assumes:
-      - flights(wind_effect, air_time).
-      - If you don't have an 'air_time' column, adapt to use 'arr_delay' or something else.
-    """
-
-    # 1) Pull relevant columns
-    df = pd.read_sql_query("""
-        SELECT wind_effect, air_time
-          FROM flights
-         WHERE wind_effect IS NOT NULL
-           AND air_time IS NOT NULL
-    """, conn)
-
-    if df.empty:
-        print("No data with both wind_effect and air_time available.")
-        return
-
-    # 2) Basic correlation
-    corr = df['wind_effect'].corr(df['air_time'])
-    print("Correlation between wind_effect and air_time: %.3f" % corr)
-
-    # 3) Scatter plot
-    plt.figure(figsize=(8,6))
-    plt.scatter(df['wind_effect'], df['air_time'], alpha=0.4)
-    plt.title('Wind Effect (Dot Product) vs. Air Time')
-    plt.xlabel('wind_effect')
-    plt.ylabel('air_time')
-    plt.grid(True)
-    plt.show()
-
-    # 4) Compare mean air time for positive vs. negative wind_effect
-    df['wind_type'] = df['wind_effect'].apply(lambda x: 'Tailwind' if x > 0 else 'Headwind')
-    avg_times = df.groupby('wind_type')['air_time'].mean()
-    
-    print("\nAverage Air Time by Wind Type:")
-    for wtype, avg in avg_times.items():
-        print(f"  {wtype}: {avg:.2f} minutes")
->>>>>>> ccb219f (trial1)
