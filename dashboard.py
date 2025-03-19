@@ -2,10 +2,15 @@ import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
+import numpy as np
 import sqlite3
 import part1
 import part3
+import part4
 
+
+# ✅ Ensure `set_page_config` is the first Streamlit command
+st.set_page_config(layout="wide")  # Must be the first command
 
 def get_df_from_database(query):
     conn = sqlite3.connect('flights_database.db')
@@ -107,6 +112,7 @@ def average_daily_flights(airport=None):
     daily_average = round(total_flights / total_days, 2)
 
     return daily_average
+
     
 def average_monthly_flights(airport=None):
     query = f'SELECT month,origin FROM flights'
@@ -220,19 +226,242 @@ def get_daily_flight_info(month,day,faa=None):
     st.dataframe(df)
 
 
+################ Departing Airports ################
+################  time of day & Delays by departure airport ###############
 
-def initalize_page():
-    st.set_page_config(layout='wide')
-    flight_df = pd.DataFrame()
 
-    query = f'SELECT faa,name,lat,lon,tzone FROM airports'
+def get_flight_delays(airport_faa, month, day):
+    """Fetch departure flight delays for a given airport."""
+    query = f"""
+        SELECT dep_time, dep_delay, sched_dep_time
+        FROM flights
+        WHERE month = {month} AND day = {day} 
+        AND origin = '{airport_faa}' 
+        AND dep_delay IS NOT NULL
+    """
+    df = get_df_from_database(query)
+    return df if 'dep_time' in df.columns else pd.DataFrame()
+
+
+def get_weather_info(airport_faa, month, day):
+    """Fetch weather info for a selected airport and date."""
+    query = f"""
+        SELECT temp, wind_speed, visib
+        FROM weather
+        WHERE month = {month} AND day = {day} AND origin = '{airport_faa}'
+    """
+    return get_df_from_database(query)
+
+def display_delay_chart(df):
+    """Display average delay as a function of time, handling missing data safely."""
+    if 'dep_time' not in df.columns:
+        st.warning("Flight data is missing 'dep_time'. Cannot display delay chart.")
+        return
+
+    df['hour'] = (df['dep_time'] // 100) % 24
+    df_grouped = df.groupby('hour')['dep_delay'].mean().reset_index()
+
+    st.subheader("Average Delay on Selected Date")
+    fig = px.line(df_grouped, x='hour', y='dep_delay', markers=True, 
+                  labels={'hour': 'Hour of Day', 'dep_delay': 'Average Delay (minutes)'})
+    st.plotly_chart(fig)
+
+
+
+
+def display_weather_info(selected_airport, month, day):
+    """Fetches and displays weather info for a selected airport and date, rounding up values."""
+    
+    # Get weather data from the database
+    query = f"""
+        SELECT temp, wind_speed, visib
+        FROM weather
+        WHERE month = {month} AND day = {day} AND origin = '{selected_airport}'
+    """
+    weather_df = get_df_from_database(query)
+
+    st.subheader("Weather on Selected Date")
+
+    if not weather_df.empty:
+        # Convert values to numeric (handling potential string values)
+        weather_df = weather_df.apply(pd.to_numeric, errors='coerce')  # Converts non-numeric values to NaN
+
+        # Handle NaN values safely: replace NaN with 0 (or another placeholder)
+        temp_min = np.ceil(weather_df['temp'].min()) if not np.isnan(weather_df['temp'].min()) else 0
+        temp_mean = np.ceil(weather_df['temp'].mean()) if not np.isnan(weather_df['temp'].mean()) else 0
+        temp_max = np.ceil(weather_df['temp'].max()) if not np.isnan(weather_df['temp'].max()) else 0
+
+        wind_min = np.ceil(weather_df['wind_speed'].min()) if not np.isnan(weather_df['wind_speed'].min()) else 0
+        wind_mean = np.ceil(weather_df['wind_speed'].mean()) if not np.isnan(weather_df['wind_speed'].mean()) else 0
+        wind_max = np.ceil(weather_df['wind_speed'].max()) if not np.isnan(weather_df['wind_speed'].max()) else 0
+
+        vis_min = np.ceil(weather_df['visib'].min()) if not np.isnan(weather_df['visib'].min()) else 0
+        vis_mean = np.ceil(weather_df['visib'].mean()) if not np.isnan(weather_df['visib'].mean()) else 0
+        vis_max = np.ceil(weather_df['visib'].max()) if not np.isnan(weather_df['visib'].max()) else 0
+
+        st.markdown(f"""
+        **Temperature (°C):**  
+        - Low: {int(temp_min)}, Avg: {int(temp_mean)}, High: {int(temp_max)}  
+
+        **Wind Speed (km/h):**  
+        - Low: {int(wind_min)}, Avg: {int(wind_mean)}, High: {int(wind_max)}  
+
+        **Visibility (km):**  
+        - Low: {int(vis_min)}, Avg: {int(vis_mean)}, High: {int(vis_max)}  
+        """)
+    else:
+        st.text("No weather data available.")
+
+
+def format_time(time_value):
+# """Converts time from HHMM format to 'HH:MM'. Handles NaN values."""
+    if pd.isna(time_value) or time_value is None:
+        return "N/A"
+
+    time_value = int(time_value)  # Ensure it's an integer
+    hours = time_value // 100
+    minutes = time_value % 100
+    
+    return f"{hours:02d}:{minutes:02d}"  # Ensure 2-digit format
+
+
+def display_departure_times(df):
+    """Displays scheduled and actual departure times in HH:MM format."""
+    st.subheader("Departure Times")
+    
+    if not df.empty:
+        # Extract scheduled and actual departure times
+        sched_dep = format_time(df['sched_dep_time'].iloc[0]) if 'sched_dep_time' in df.columns else "N/A"
+        actual_dep = format_time(df['dep_time'].iloc[0]) if 'dep_time' in df.columns else "N/A"
+    else:
+        sched_dep, actual_dep = "N/A", "N/A"
+
+    st.markdown(f"""
+    **Scheduled Departure:**  {sched_dep}  
+    **Actual Departure:**  {actual_dep}  
+    """)
+
+
+
+def time_based_statistics():
+    """Displays statistics for departure airports only."""
+    st.header("Statistics as a Function of Time", divider='gray')
+
+    selected_departure = st.session_state.get("fd_origin")
+
+    if not selected_departure:
+        st.warning("Please select a departure airport in the sidebar.")
+        return
+
+    selected_date = st.sidebar.date_input("Select a date", value=pd.to_datetime("2023-01-01"))
+    month, day = selected_date.month, selected_date.day
+
+    departure_faa = get_faa(selected_departure)
+    if departure_faa:
+        st.subheader(f"Departure Statistics for {selected_departure}")
+        df = get_flight_delays(departure_faa, month, day)
+
+        if not df.empty:
+            col1, col2 = st.columns([0.7, 0.3])
+            with col1:
+                display_delay_chart(df)
+            with col2:
+                display_weather_info(departure_faa, month, day)
+                display_departure_times(df)
+        else:
+            st.warning(f"No flight data available for {selected_departure} on {selected_date}.")
+
+
+
+################ Arrival Airports ################
+
+
+
+
+
+##############   #################
+
+
+def time_based_statistics():
+    """Displays statistics for departure airports only."""
+    st.header("Statistics as a Function of Time", divider='gray')
+
+    selected_departure = st.session_state.get("fd_origin")
+
+    if not selected_departure:
+        st.warning("Please select a departure airport in the sidebar.")
+        return
+
+    selected_date = st.sidebar.date_input("Select a date", value=pd.to_datetime("2023-01-01"))
+    month, day = selected_date.month, selected_date.day
+
+    departure_faa = get_faa(selected_departure)
+    if departure_faa:
+        st.subheader(f"Departure Statistics for {selected_departure}")
+        df = get_flight_delays(departure_faa, month, day)
+
+        if not df.empty:
+            col1, col2 = st.columns([0.7, 0.3])
+            with col1:
+                display_delay_chart(df)
+            with col2:
+                display_weather_info(departure_faa, month, day)
+                display_departure_times(df)
+        else:
+            st.warning(f"No flight data available for {selected_departure} on {selected_date}.")
+
+
+
+
+
+
+
+###############  ##############
+
+def initialize_page():
+    """Initializes the main dashboard page layout and displays general flight information."""
+    
+    # ✅ Ensure session state variables are initialized before use
+    if "fd_details" not in st.session_state:
+        st.session_state.fd_details = None
+    if "fd_show_data" not in st.session_state:
+        st.session_state.fd_show_data = False
+    if "fd_start" not in st.session_state:
+        st.session_state.fd_start = 0
+    if "fd_origin" not in st.session_state:
+        st.session_state.fd_origin = None
+    if "fd_dest" not in st.session_state:
+        st.session_state.fd_dest = None
+    if "fetch_specific_info" not in st.session_state:
+        st.session_state.fetch_specific_info = False
+    if "fetch_general_info" not in st.session_state:
+        st.session_state.fetch_general_info = True
+    if "delay_info_ap" not in st.session_state:
+        st.session_state.delay_info_ap = None
+    if "map_type" not in st.session_state:
+        st.session_state.map_type = "inter"
+    if "map_airport_loc" not in st.session_state:
+        st.session_state.map_airport_loc = None
+    if "selected_airport" not in st.session_state:
+        st.session_state.selected_airport = None
+
+
+    # Load airports data
+    query = 'SELECT faa, name, lat, lon, tzone FROM airports'
     all_airports_df = get_df_from_database(query)
 
-    # Create Title
+    # Create Page Title
     st.title('Flight Information Dashboard')
 
     
-    st.header('NYC Flight Info and Delays',divider='gray')
+    # Load airports data
+    query = 'SELECT faa, name, lat, lon, tzone FROM airports'
+    all_airports_df = get_df_from_database(query)
+
+   
+
+    # NYC Flight Info and Delays Section
+    st.header('NYC Flight Info and Delays', divider='gray')
 
     if 'fetch_specific_info' not in st.session_state:
         st.session_state.fetch_specific_info = False
@@ -241,6 +470,7 @@ def initalize_page():
     if 'delay_info_ap' not in st.session_state:
         st.session_state.delay_info_ap = None
 
+    # Buttons to select flight information type
     with st.container():
         col1, col2 = st.columns(2)
         with col1:
@@ -251,258 +481,201 @@ def initalize_page():
             if st.button('Select Airport'):
                 st.session_state.fetch_specific_info = True
                 st.session_state.fetch_general_info = False
-        
+
         if st.session_state.fetch_specific_info:
             names = part3.get_nyc_airports()
-            airport = st.selectbox('Select Departing Airport',names,index=None,placeholder='Enter name of desired airport')
+            airport = st.selectbox('Select Departing Airport', names, index=None, placeholder='Enter airport name')
             if airport:
-                
                 st.session_state.delay_info_ap = airport
-                #Daily Average Flights
                 st.text(f'Average Daily Flights: {average_daily_flights(airport)} flights')
-                st.text(f'Average Monthly Flights: {average_monthly_flights(airport)}')
-                # st.dataframe(fill_departure_time(airport))
-                
-                
-            
+                st.text(f'Average Monthly Flights: {average_monthly_flights(airport)} flights')
 
         if st.session_state.fetch_general_info:
-            #Daily Average Flights
-            
             st.text(f'Average Daily Flights from NYC: {average_daily_flights()} flights')
             st.text(f'Average Monthly Flights from NYC: {average_monthly_flights()} flights')
 
+    # Map of Airports Section
+    st.header('Map of Airports', divider='gray')
 
-
-    
-    
-
-
-
-
-    #Show Map of All Airports
-    st.header('Map of Airports',divider='gray') #Header for section
-
-    # Initialize session state for map type and selected airport location
     if 'map_type' not in st.session_state:
         st.session_state.map_type = 'inter'
     if 'map_airport_loc' not in st.session_state:
-        st.session_state.map_airport_loc = None  
+        st.session_state.map_airport_loc = None
     if 'selected_airport' not in st.session_state:
-        st.session_state.selected_airport = None 
-        
+        st.session_state.selected_airport = None
 
-    # Handle button clicks
+    # Buttons to switch between US and International maps
     col1, col2 = st.columns(2)
     with col1:
         if st.button('United States'):
             st.session_state.map_type = 'usa'
-            st.session_state.map_airport_loc = None  # Reset selected airport
+            st.session_state.map_airport_loc = None
     with col2:
         if st.button('International'):
             st.session_state.map_type = 'inter'
-            st.session_state.map_airport_loc = None  # Reset selected airport
+            st.session_state.map_airport_loc = None
 
-    # Generate the appropriate map
+    # Determine which map to show
     if st.session_state.map_airport_loc is not None:
-        fig = st.session_state.map_airport_loc  # Use selected airport map
+        fig = st.session_state.map_airport_loc
     elif st.session_state.map_type == 'inter':
         fig = part1.all_airports(all_airports_df)
     else:
         fig = part1.only_usa(all_airports_df)
 
-    map_plot = st.empty()
-    map_plot.plotly_chart(fig, key='main_map')
+    st.plotly_chart(fig, key='main_map')
 
-    # Dropdown for selecting an airport
-    col3, col4 = st.columns([.9,.1], vertical_alignment='bottom')
+    # Dropdown for selecting an airport location
+    col3, col4 = st.columns([0.9, 0.1])
     with col3:
         selected = st.selectbox(
             'Find Location of Airport',
             all_airports_df['name'],
             index=None if st.session_state.selected_airport is None else all_airports_df['name'].tolist().index(st.session_state.selected_airport),
-            placeholder='Enter name of desired airport'
+            placeholder='Enter airport name'
         )
         if selected:
             st.session_state.selected_airport = selected
             temp_df = all_airports_df[all_airports_df['name'] == selected]
             codes = temp_df['faa'].item()
             if in_usa(selected):
-                st.session_state.map_airport_loc = part1.flight_paths([codes],temp_df)
-                #st.session_state.map_airport_loc = part1.only_usa(temp_df)
+                st.session_state.map_airport_loc = part1.flight_paths([codes], temp_df)
             else:
-                st.session_state.map_airport_loc = part1.flight_paths([codes],temp_df)
-                #st.session_state.map_airport_loc = part1.all_airports(temp_df)
+                st.session_state.map_airport_loc = part1.flight_paths([codes], temp_df)
 
-            map_plot.plotly_chart(st.session_state.map_airport_loc)  # Update the map
+            st.plotly_chart(st.session_state.map_airport_loc)
 
     with col4:
         if st.button('Clear'):
             st.session_state.map_airport_loc = None
             st.session_state.selected_airport = None
             st.session_state.map_type = 'inter'
-            map_plot.plotly_chart(part1.all_airports(all_airports_df), key='reset_map')  # Reset the map
+            st.plotly_chart(part1.all_airports(all_airports_df), key='reset_map')
 
-    
-    
-
-
-
-        
-        
-        
-
-    #Stats based on user input of airport
-    st.header('Airport Specific Details',divider='gray')
+    # Airport Specific Details Section
+    st.header('Airport Specific Details', divider='gray')
     with st.container():
-        name = st.selectbox('Airport Name',all_airports_df['name'],index=None,placeholder='Enter name of desired airport')
+        name = st.selectbox('Airport Name', all_airports_df['name'], index=None, placeholder='Enter airport name')
         if name:
             id = all_airports_df[all_airports_df['name'] == name]
             temp_df = flights_per_airline(id['faa'].item())
-            st.plotly_chart(px.pie(temp_df,names='name',values='num_flights'))
+            st.plotly_chart(px.pie(temp_df, names='name', values='num_flights'))
 
+    # Airlines' Average Departure Delays Section
+    st.header("Airlines' Average Departure Delays", divider='gray')
+    delay_data = part3.average_departure_delay()
+    st.bar_chart(delay_data, x_label='Airline', y_label='Average Departure Delay')
 
-    # Create Bar Graph
+    # Flight Details Section
+    st.header("Flight Details", divider='gray')
     with st.container():
-        delay_data = part3.average_departure_delay()
-        st.header("Airlines' Average Departure Delays",divider='gray')
-        st.bar_chart(delay_data,x_label='Airline',y_label='Average Departure Delay')
-
-
-
-
-
-    # Creates Sidebar
-    flight_df = pd.DataFrame()
-    nyc_airports = part3.get_nyc_airports()
-    other_airports = get_other_airports()
-
-
-        
-    if 'fd_show_data' not in st.session_state:
-        st.session_state.fd_show_data = None
-    if 'fd_start' not in st.session_state:
-        st.session_state.fd_start = 0
-    if 'fd_origin' not in st.session_state:
-        st.session_state.fd_origin = None
-    if 'fd_dest' not in st.session_state:
-        st.session_state.fd_dest = None
-    if 'fd_details' not in st.session_state:
-        st.session_state.fd_details = None
-    
-
-    flight_details = st.container()
-    with flight_details:
-        st.header("Flight Details",divider='gray')
-        
         if st.session_state.fd_details is not None:
             row = st.session_state.fd_details
-            origin = row[0]
-            dest = row[1]
-            dep_time = row[2]
-            flight_num = row[3]
-            year = row[4]
-            month = row[5]
-            day = row[6]
-            carrier = get_carrier_name(row[7])
-
+            origin, dest, dep_time, flight_num, year, month, day, carrier_code = row
+            carrier = get_carrier_name(carrier_code)
             date = f'{month}/{day}/{year}'
-            dep_hour = int(dep_time // 100)
-            dep_hour = "{:02d}".format(dep_hour)
-            dep_min = int(dep_time % 100)
-            dep_min = "{:02d}".format(dep_min)
+            dep_hour = "{:02d}".format(int(dep_time // 100))
+            dep_min = "{:02d}".format(int(dep_time % 100))
 
             st.subheader(f'Flight {flight_num} from {origin} to {dest}')
             fig = get_flight_path(row)
             st.plotly_chart(fig)
-            st.text(f'Departure Time:  {dep_hour}:{dep_min}')
+            st.text(f'Departure Time: {dep_hour}:{dep_min}')
             st.text(f'Date: {date}')
             st.text(f'Airline: {carrier}')
-
-
-            
         else:
-            st.text('Please enter flight details in sidebar. Additional flight info will appear here once inital details are entered.')
-            
+            st.text('Please enter flight details in sidebar. Additional flight info will appear here once details are entered.')
 
+
+
+######### Sidebar #########
+
+def create_sidebar():
+    """Creates the sidebar UI for selecting departure and arrival airports and viewing flight details."""
     with st.sidebar:
         st.title('Find your flight:')
-        departure = st.selectbox('Departure',nyc_airports,index=None,placeholder='Enter departing airport name')
-        arrival = st.selectbox('Arrival',other_airports,index=None,placeholder='Enter arriving airport name')
+        
+        # Dropdowns for departure and arrival airports
+        departure = st.selectbox('Departure', nyc_airports, index=None, placeholder='Enter departing airport name')
+        arrival = st.selectbox('Arrival', other_airports, index=None, placeholder='Enter arriving airport name')
+        
+        # Update session state to store the selected airport
+        if departure:
+            st.session_state["fd_origin"] = departure  # Store departure airport in session state
+        
         if departure and arrival:
-            flight_df = flight_info(departure,arrival)
+            flight_df = flight_info(departure, arrival)
             flight_df = flight_df.reset_index(drop=True)
-            end = flight_df.size
+            end = len(flight_df.index)
+            
             if end > 0:
-                if st.button('View Flight Info',icon='✈️'):
-                    
+                if st.button('View Flight Info', icon='✈️'):
                     st.session_state.fd_show_data = True
                     st.session_state.fd_origin = get_faa(departure)
                     st.session_state.fd_dest = get_faa(arrival)
-                    
             else:
                 st.text(f'No flights from {departure} to {arrival}. Please try again.')
 
+            # Display flight details
             if st.session_state.fd_show_data:
-                
-
-                for i in range(10):
-                    row = flight_df.loc[i+st.session_state.fd_start]
-
-                    carrier = get_carrier_name(row['carrier'])
+                for i in range(min(10, end - st.session_state.fd_start)):
+                    row = flight_df.iloc[i + st.session_state.fd_start]
                     
-
+                    carrier = get_carrier_name(row['carrier'])
                     flight_num = row['flight'].item()
                     dep_time = row['dep_time']
-
-                    dep_hour = int(dep_time // 100)
-                    dep_hour = "{:02d}".format(dep_hour)
-                    dep_min = int(dep_time % 100)
-                    dep_min = "{:02d}".format(dep_min)
-
-                    year = row['year']
-                    month = row['month']
-                    day = row['day']
-
-                    
-                    
+                    dep_hour = "{:02d}".format(int(dep_time // 100))
+                    dep_min = "{:02d}".format(int(dep_time % 100))
+                    year, month, day = row['year'], row['month'], row['day']
 
                     with st.container(border=True):
-                        col1, col2,col3 = st.columns([0.4,0.3,0.3])
+                        col1, col2, col3 = st.columns([0.4, 0.3, 0.3])
                         with col1:
-                            st.text('Date(MM/DD/YYYY):')                  
-                            st.text(f'{month}/{day}/{year}')      
+                            st.text('Date (MM/DD/YYYY):')
+                            st.text(f'{month}/{day}/{year}')
                         with col2:
                             st.text('Flight Number:')
                             st.text(f'{flight_num}')
                         with col3:
-                            if st.button('Details',key=i):
+                            if st.button('Details', key=i):
                                 st.session_state.fd_details = row.tolist()
                                 st.rerun()
 
-
-                col1, col2 = st.columns([.5,.5])
+                # Pagination buttons
+                col1, col2 = st.columns([0.5, 0.5])
                 with col1:
                     if st.button('View Previous'):
-                        start_num = st.session_state.fd_start
-                        if start_num - 10 >= 0:
-                            st.session_state.fd_start = start_num - 10
+                        if st.session_state.fd_start - 10 >= 0:
+                            st.session_state.fd_start -= 10
                             st.rerun()
                 with col2:
                     if st.button('View More'):
-                        start_num = st.session_state.fd_start
-                        if start_num + 10 < end:
-                            st.session_state.fd_start = start_num + 10
+                        if st.session_state.fd_start + 10 < end:
+                            st.session_state.fd_start += 10
                             st.rerun()
 
-        elif departure == None or arrival == None:
+        else:
             st.session_state.fd_show_data = False
             st.session_state.fd_details = None
-            
 
+
+
+########### Main Function ###########
 
 def main():
-    initalize_page()
+    """Main function to run the Streamlit app."""
+    initialize_page()  # Sets up the main dashboard
+
+    # Load airport data required for sidebar dropdowns
+    global nyc_airports, other_airports
+    nyc_airports = part3.get_nyc_airports()
+    other_airports = get_other_airports()
+
+    create_sidebar()   # Initializes the sidebar separately
+    time_based_statistics()  # Displays time-based statistics
+
 
 if __name__ == '__main__':
     main()
+
+
