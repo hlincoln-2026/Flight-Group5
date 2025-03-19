@@ -342,6 +342,18 @@ def display_departure_times(df):
     """)
 
 
+def get_selected_date():
+    """Returns the user-selected date as (month, day), or (None, None) if not selected."""
+    selected_date = st.sidebar.date_input("Select a date")
+
+    # If the user has not interacted with the date picker, return None
+    if not selected_date:
+        return None, None
+    
+    return selected_date.month, selected_date.day
+
+
+
 
 def time_based_statistics():
     """Displays statistics for departure airports only."""
@@ -353,8 +365,8 @@ def time_based_statistics():
         st.warning("Please select a departure airport in the sidebar.")
         return
 
-    selected_date = st.sidebar.date_input("Select a date", value=pd.to_datetime("2023-01-01"))
-    month, day = selected_date.month, selected_date.day
+    # 🔹 Use the new function to get the selected date
+    month, day = get_selected_date()
 
     departure_faa = get_faa(selected_departure)
     if departure_faa:
@@ -369,13 +381,7 @@ def time_based_statistics():
                 display_weather_info(departure_faa, month, day)
                 display_departure_times(df)
         else:
-            st.warning(f"No flight data available for {selected_departure} on {selected_date}.")
-
-
-
-################ Arrival Airports ################
-
-
+            st.warning(f"No flight data available for {selected_departure} on {month}/{day}.")
 
 
 
@@ -409,6 +415,78 @@ def time_based_statistics():
                 display_departure_times(df)
         else:
             st.warning(f"No flight data available for {selected_departure} on {selected_date}.")
+
+
+
+################ Delay analysis ################
+
+
+def get_flight_delays_multiple(airport_faa_list, month, day):
+    """Fetches flight delays for multiple departure airports on a given date."""
+    airport_faa_str = "', '".join(airport_faa_list)  # Format for SQL IN clause
+    query = f"""
+        SELECT origin, dep_time, dep_delay
+        FROM flights
+        WHERE month = {month} AND day = {day}
+        AND origin IN ('{airport_faa_str}')
+        AND dep_delay IS NOT NULL
+    """
+    df = get_df_from_database(query)
+    
+    if df.empty or 'dep_time' not in df.columns:
+        return pd.DataFrame()  # Return an empty DataFrame if no data is found
+    
+    # Convert departure time to hours for aggregation
+    df['hour'] = (df['dep_time'] // 100) % 24
+    return df
+
+
+def display_departure_delay_comparison():
+    """Displays a line graph comparing departure delays for three major airports only after a date is selected."""
+    st.subheader("Comparison of Departure Delays Across Airports")
+
+    # 🔹 Check if the user has selected a date
+    month, day = get_selected_date()
+
+    if month is None or day is None:
+        st.warning("Please select a departure date in the sidebar.")
+        return  # Stop execution until the user selects a date
+
+
+    # if not get_selected_date():
+    #     st.warning("Please select a departure date in the sidebar.")
+    #     return  # Stop execution until the user selects a date
+
+
+    # if not selected_departure:
+    #     st.warning("Please select a departure airport in the sidebar.")
+    #     return
+
+
+
+    # Define the three NYC airports
+    nyc_airports_faa = ['JFK', 'LGA', 'EWR']  # FAA codes for JFK, LaGuardia, and Newark
+
+    # Fetch delay data for all three airports
+    df = get_flight_delays_multiple(nyc_airports_faa, month, day)
+
+    if df.empty:
+        st.warning(f"No flight delay data available for {month}/{day}.")
+        return
+
+    # Group by hour and airport, then compute the average delay
+    df_grouped = df.groupby(['hour', 'origin'])['dep_delay'].mean().reset_index()
+
+    # Plot using Plotly
+    fig = px.line(df_grouped, x='hour', y='dep_delay', color='origin',
+                  labels={'hour': 'Hour of Day', 'dep_delay': 'Average Delay (minutes)', 'origin': 'Airport'},
+                  markers=True, title="Average Departure Delays Throughout the Day")
+
+    st.plotly_chart(fig)
+
+
+
+
 
 
 
@@ -673,6 +751,7 @@ def main():
 
     create_sidebar()   # Initializes the sidebar separately
     time_based_statistics()  # Displays time-based statistics
+    display_departure_delay_comparison()  # Displays departure delay comparison
 
 
 if __name__ == '__main__':
