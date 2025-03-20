@@ -115,6 +115,61 @@ def display_flight_statistics():
 #########################################################################################
 
 
+
+################################ plane stats###############################################
+
+def display_plane_statistics():
+    """
+    Updates the planes table with calculated average speeds
+    and displays a bar chart showing the top 10 fastest plane models,
+    color-coded by manufacturer, with additional hover data.
+    """
+    part3.calculate_average_plane_speed()
+
+    # Retrieve the updated planes data (including manufacturer)
+    query = "SELECT tailnum, model, speed, manufacturer FROM planes"
+    planes_df = get_df_from_database(query)
+
+    # Group by both model and manufacturer to get a single average speed per (model, manufacturer)
+    planes_grouped = planes_df.groupby(["model", "manufacturer"], as_index=False)["speed"].mean()
+
+    # Sort by speed descending and take top 10
+    top_planes = (
+        planes_grouped
+        .dropna(subset=["speed"])
+        .sort_values("speed", ascending=False)
+        .head(10)
+    )
+
+    # Round speeds to 2 decimals for a cleaner display
+    top_planes["speed"] = top_planes["speed"].round(2)
+
+    fig = px.bar(
+        top_planes,
+        x="model",
+        y="speed",
+        color="manufacturer",     # Color-code by manufacturer
+        hover_data=["manufacturer", "speed"],  # Extra info on hover
+        title="Top 10 Fastest Plane Models",
+        labels={"model": "Plane Model", "speed": "Average Speed (mph)"},
+        text="speed"  # Display speed value on each bar
+    )
+
+
+    fig.update_traces(
+        texttemplate="%{text:.2f}",
+        textposition="outside"
+    )
+    fig.update_layout(xaxis_tickangle=-45)
+
+    st.plotly_chart(fig)
+
+
+
+#########################################################################################
+
+
+
 def get_df_from_database(query):
     conn = sqlite3.connect('flights_database.db')
     cursor = conn.cursor()
@@ -854,6 +909,7 @@ def main():
     create_sidebar()   # Initializes the sidebar separately
     time_based_statistics()  # Displays time-based statistics
     display_departure_delay_comparison()  # Displays departure delay comparison
+    display_plane_statistics()
 
 
 if __name__ == '__main__':
