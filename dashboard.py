@@ -12,6 +12,109 @@ import part4
 # ✅ Ensure `set_page_config` is the first Streamlit command
 st.set_page_config(layout="wide")  # Must be the first command
 
+
+############# flight statistics ############################
+
+def get_airport_name(faa):
+    """
+    Given an FAA code, return the airport's name.
+    Returns the FAA code itself if no matching record is found.
+    """
+    query = "SELECT name FROM airports WHERE faa = ?"
+    conn = sqlite3.connect('flights_database.db')
+    df = pd.read_sql_query(query, conn, params=(faa,))
+    conn.close()
+
+    if not df.empty:
+        return df["name"].iloc[0]
+    else:
+        return faa  # Fallback if no record found
+
+
+
+def get_flight_statistics():
+    query = """
+        SELECT origin, dest, carrier, distance
+        FROM flights
+    """
+    df = get_df_from_database(query)
+
+    if df.empty:
+        st.warning("No flight data available.")
+        return {}
+
+    total_flights = len(df)
+    unique_destinations = df['dest'].nunique()
+
+    # Get the FAA codes for these destinations
+    most_visited_faa = df['dest'].value_counts().idxmax()
+    least_visited_faa = df['dest'].value_counts().idxmin()
+    furthest_dest_faa = df.loc[df['distance'].idxmax(), 'dest']
+    closest_dest_faa = df.loc[df['distance'].idxmin(), 'dest']
+
+    # Convert each FAA code to "FAA - Airport Name"
+    most_visited = f"{most_visited_faa} - {get_airport_name(most_visited_faa)}"
+    least_visited = f"{least_visited_faa} - {get_airport_name(least_visited_faa)}"
+    furthest_dest = f"{furthest_dest_faa} - {get_airport_name(furthest_dest_faa)}"
+    closest_dest = f"{closest_dest_faa} - {get_airport_name(closest_dest_faa)}"
+
+    busiest_airline = df['carrier'].value_counts().idxmax()  
+    busiest_airline_name = get_carrier_name(busiest_airline)
+
+    # Compile your stats
+    stats = {
+        "Total Flights": total_flights,
+        "Unique Destinations": unique_destinations,
+        "Most Visited Destination": most_visited,
+        "Least Visited Destination": least_visited,
+        "Busiest Airline": busiest_airline_name,  # or busiest_airline_name
+        "Furthest Destination": furthest_dest,
+        "Closest Destination": closest_dest
+    }
+    
+    return stats
+
+
+
+
+def display_flight_statistics():
+    """
+    Displays flight statistics in a neat two-column table.
+    """
+    st.subheader("Flight Statistics (All Flights)")
+    stats = get_flight_statistics()
+    # Convert busiest airline if it's a Series or something similar
+    busiest_airline_value = stats["Busiest Airline"]
+    if isinstance(busiest_airline_value, pd.Series):
+        busiest_airline_value = busiest_airline_value.iloc[0]
+
+    stats_table = pd.DataFrame({
+        "Statistic": [
+            "Total Flights", 
+            "Unique Destinations", 
+            "Most Visited Destination",
+            "Least Visited Destination",
+            "Busiest Airline",
+            "Furthest Destination",
+            "Closest Destination"
+        ],
+        "Value": [
+            stats["Total Flights"],
+            stats["Unique Destinations"],
+            stats["Most Visited Destination"],
+            stats["Least Visited Destination"],
+            busiest_airline_value,
+            stats["Furthest Destination"],
+            stats["Closest Destination"]
+        ]
+    })
+    st.table(stats_table)
+
+
+
+#########################################################################################
+
+
 def get_df_from_database(query):
     conn = sqlite3.connect('flights_database.db')
     cursor = conn.cursor()
@@ -531,7 +634,7 @@ def initialize_page():
     # Create Page Title
     st.title('Flight Information Dashboard')
 
-    
+    display_flight_statistics()  # Add statistics section
     # Load airports data
     query = 'SELECT faa, name, lat, lon, tzone FROM airports'
     all_airports_df = get_df_from_database(query)
@@ -748,7 +851,6 @@ def main():
     global nyc_airports, other_airports
     nyc_airports = part3.get_nyc_airports()
     other_airports = get_other_airports()
-
     create_sidebar()   # Initializes the sidebar separately
     time_based_statistics()  # Displays time-based statistics
     display_departure_delay_comparison()  # Displays departure delay comparison
