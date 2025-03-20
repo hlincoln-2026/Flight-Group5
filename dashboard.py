@@ -12,6 +12,164 @@ import part4
 # ✅ Ensure `set_page_config` is the first Streamlit command
 st.set_page_config(layout="wide")  # Must be the first command
 
+
+############# flight statistics ############################
+
+def get_airport_name(faa):
+    """
+    Given an FAA code, return the airport's name.
+    Returns the FAA code itself if no matching record is found.
+    """
+    query = "SELECT name FROM airports WHERE faa = ?"
+    conn = sqlite3.connect('flights_database.db')
+    df = pd.read_sql_query(query, conn, params=(faa,))
+    conn.close()
+
+    if not df.empty:
+        return df["name"].iloc[0]
+    else:
+        return faa  # Fallback if no record found
+
+
+
+def get_flight_statistics():
+    query = """
+        SELECT origin, dest, carrier, distance
+        FROM flights
+    """
+    df = get_df_from_database(query)
+
+    if df.empty:
+        st.warning("No flight data available.")
+        return {}
+
+    total_flights = len(df)
+    unique_destinations = df['dest'].nunique()
+
+    # Get the FAA codes for these destinations
+    most_visited_faa = df['dest'].value_counts().idxmax()
+    least_visited_faa = df['dest'].value_counts().idxmin()
+    furthest_dest_faa = df.loc[df['distance'].idxmax(), 'dest']
+    closest_dest_faa = df.loc[df['distance'].idxmin(), 'dest']
+
+    # Convert each FAA code to "FAA - Airport Name"
+    most_visited = f"{most_visited_faa} - {get_airport_name(most_visited_faa)}"
+    least_visited = f"{least_visited_faa} - {get_airport_name(least_visited_faa)}"
+    furthest_dest = f"{furthest_dest_faa} - {get_airport_name(furthest_dest_faa)}"
+    closest_dest = f"{closest_dest_faa} - {get_airport_name(closest_dest_faa)}"
+
+    busiest_airline = df['carrier'].value_counts().idxmax()  
+    busiest_airline_name = get_carrier_name(busiest_airline)
+
+    # Compile your stats
+    stats = {
+        "Total Flights": total_flights,
+        "Unique Destinations": unique_destinations,
+        "Most Visited Destination": most_visited,
+        "Least Visited Destination": least_visited,
+        "Busiest Airline": busiest_airline_name,  # or busiest_airline_name
+        "Furthest Destination": furthest_dest,
+        "Closest Destination": closest_dest
+    }
+    
+    return stats
+
+
+
+
+def display_flight_statistics():
+    """
+    Displays flight statistics in a neat two-column table.
+    """
+    st.subheader("Flight Statistics (All Flights)")
+    stats = get_flight_statistics()
+    # Convert busiest airline if it's a Series or something similar
+    busiest_airline_value = stats["Busiest Airline"]
+    if isinstance(busiest_airline_value, pd.Series):
+        busiest_airline_value = busiest_airline_value.iloc[0]
+
+    stats_table = pd.DataFrame({
+        "Statistic": [
+            "Total Flights", 
+            "Unique Destinations", 
+            "Most Visited Destination",
+            "Least Visited Destination",
+            "Busiest Airline",
+            "Furthest Destination",
+            "Closest Destination"
+        ],
+        "Value": [
+            stats["Total Flights"],
+            stats["Unique Destinations"],
+            stats["Most Visited Destination"],
+            stats["Least Visited Destination"],
+            busiest_airline_value,
+            stats["Furthest Destination"],
+            stats["Closest Destination"]
+        ]
+    })
+    st.table(stats_table)
+
+
+
+#########################################################################################
+
+
+
+################################ plane stats###############################################
+
+def display_plane_statistics():
+    """
+    Updates the planes table with calculated average speeds
+    and displays a bar chart showing the top 10 fastest plane models,
+    color-coded by manufacturer, with additional hover data.
+    """
+    part3.calculate_average_plane_speed()
+
+    # Retrieve the updated planes data (including manufacturer)
+    query = "SELECT tailnum, model, speed, manufacturer FROM planes"
+    planes_df = get_df_from_database(query)
+
+    # Group by both model and manufacturer to get a single average speed per (model, manufacturer)
+    planes_grouped = planes_df.groupby(["model", "manufacturer"], as_index=False)["speed"].mean()
+
+    # Sort by speed descending and take top 10
+    top_planes = (
+        planes_grouped
+        .dropna(subset=["speed"])
+        .sort_values("speed", ascending=False)
+        .head(10)
+    )
+
+    # Round speeds to 2 decimals for a cleaner display
+    top_planes["speed"] = top_planes["speed"].round(2)
+
+    fig = px.bar(
+        top_planes,
+        x="model",
+        y="speed",
+        color="manufacturer",     # Color-code by manufacturer
+        hover_data=["manufacturer", "speed"],  # Extra info on hover
+        title="Top 10 Fastest Plane Models",
+        labels={"model": "Plane Model", "speed": "Average Speed (mph)"},
+        text="speed"  # Display speed value on each bar
+    )
+
+
+    fig.update_traces(
+        texttemplate="%{text:.2f}",
+        textposition="outside"
+    )
+    fig.update_layout(xaxis_tickangle=-45)
+
+    st.plotly_chart(fig)
+
+
+
+#########################################################################################
+
+
+
 def get_df_from_database(query):
     conn = sqlite3.connect('flights_database.db')
     cursor = conn.cursor()
@@ -531,7 +689,7 @@ def initialize_page():
     # Create Page Title
     st.title('Flight Information Dashboard')
 
-    
+    display_flight_statistics()  # Add statistics section
     # Load airports data
     query = 'SELECT faa, name, lat, lon, tzone FROM airports'
     all_airports_df = get_df_from_database(query)
@@ -748,10 +906,10 @@ def main():
     global nyc_airports, other_airports
     nyc_airports = part3.get_nyc_airports()
     other_airports = get_other_airports()
-
     create_sidebar()   # Initializes the sidebar separately
     time_based_statistics()  # Displays time-based statistics
     display_departure_delay_comparison()  # Displays departure delay comparison
+    display_plane_statistics()
 
 
 if __name__ == '__main__':
