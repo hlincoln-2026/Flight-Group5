@@ -3,6 +3,7 @@ import part1
 import pandas as pd
 from matplotlib import pyplot as plt
 import plotly.graph_objects as go
+import seaborn as sns
 
 def get_df_from_database(query):
     conn = sqlite3.connect('flights_database.db')
