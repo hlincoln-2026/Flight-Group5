@@ -60,7 +60,7 @@ def get_flight_statistics():
     least_frequent_route_tuple = route_counts.idxmin()  # (origin, dest)
 
 
-    # Format routes to include FAA code and airport name for both origin and destination
+
     most_frequent_route = (
         f"{get_airport_name(most_frequent_route_tuple[0])} ({most_frequent_route_tuple[0]}) → "
         f"{get_airport_name(most_frequent_route_tuple[1])} ({most_frequent_route_tuple[1]})"
@@ -71,7 +71,7 @@ def get_flight_statistics():
     )
 
 
-    # Compute highest and lowest volume carriers using corporate phrasing
+    # Compute highest and lowest volume carriers
     carrier_counts = df['carrier'].value_counts()
     highest_volume_carrier = carrier_counts.idxmax()
     lowest_volume_carrier = carrier_counts.idxmin()
