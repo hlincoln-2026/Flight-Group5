@@ -1008,7 +1008,7 @@ def initialize_page():
     # Airlines' Average Departure Delays Section
     st.header("Airlines' Average Departure Delays", divider='gray')
     delay_data = part3.average_departure_delay()
-    st.bar_chart(delay_data, x_label='Airline', y_label='Average Departure Delay')
+    st.bar_chart(delay_data, x_label='Airline', y_label='Average Departure Delay', stack=True)
 
     # Flight Details Section
     st.header("Flight Details", divider='gray')
