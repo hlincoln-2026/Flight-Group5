@@ -383,9 +383,32 @@ def top_airplane_manufacturers(dest):
 
 def analyze_distance_vs_arrival_delay():
     """Investigate the relationship between flight distance and arrival delay time."""
-    
-    pass
+    conn = sqlite3.connect('flights_database.db')
 
+    query = """
+    SELECT distance, arr_delay
+    FROM flights
+    WHERE arr_delay IS NOT NULL AND distance IS NOT NULL;
+    """
+
+    df = pd.read_sql_query(query, conn)
+
+    conn.close()
+
+    print(df.head())
+
+    print(df.describe())
+
+    plt.figure(figsize=(10,6))
+    sns.scatterplot(x='distance', y='arr_delay', data=df, alpha=0.5)
+    plt.title('Flight Distance vs Arrival Delay Time')
+    plt.xlabel('Distance (miles)')
+    plt.ylabel('Arrival Delay Time (minutes)')
+    plt.grid(True)
+    plt.show()
+
+    correlation = df['distance'].corr(df['arr_delay'])
+    print(f"Correlation coefficient between flight distance and arrival delay time: {correlation:.2f}")
 
 def calculate_average_plane_speed():
     """Calculate the average speed (in mph) for each plane model.
