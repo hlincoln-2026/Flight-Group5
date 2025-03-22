@@ -139,7 +139,7 @@ def display_top_manufacturers_for_destination():
     for flights departing to a selected international destination.
 
     """
-    st.header("International Destination Manufacturer Analysis", divider="gray")
+    st.header("International Airport Destination Manufacturer Analysis", divider="gray")
     
     # Retrieve only international airports (those with "international" in the name)
     airports_query = "SELECT faa, name FROM airports WHERE lower(name) LIKE '%international%'"
