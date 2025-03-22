@@ -20,7 +20,7 @@ returns the amount of delayed flights to that destination.
 8. (Done) Write a function that takes a destination airport as input and returns the top 5
 airplane manufacturers with planes departing to this destination. For this task,
 you have to combine data from flights and planes.
-9. (Atish) Investigate whether there is a relationship between the distance of a flight and
+9. (Done) Investigate whether there is a relationship between the distance of a flight and
 the arrival delay time.
 10. (Done) Group the table flights by plane model using the tailnum . For each model,
 compute the average speed by taking the average of the distance divided by flight time over all flights of that model. Use this information to fill the column speed
