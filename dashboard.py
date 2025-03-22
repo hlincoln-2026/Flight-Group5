@@ -201,6 +201,117 @@ def display_top_manufacturers_for_destination():
         
         st.plotly_chart(fig)
 
+#################################### airline market share ############################
+
+def display_airline_market_share():
+    """
+    Displays a horizontal bar chart showing the share of total flights for each airline,
+    leveraging the airlines table for airline names.
+    """
+
+    query = """
+        SELECT a.name AS airline_name,
+               COUNT(*) AS num_flights
+        FROM flights f
+        JOIN airlines a ON f.carrier = a.carrier
+        GROUP BY a.name
+    """
+    df = get_df_from_database(query)
+
+    if df.empty:
+        st.warning("No flight data available.")
+        return
+
+
+    df = df.sort_values("num_flights", ascending=False)
+
+   
+    total_flights = df["num_flights"].sum()
+    df["percentage"] = (df["num_flights"] / total_flights * 100).round(2)
+
+    # Create a horizontal bar chart 
+    fig = px.bar(
+        df,
+        x="num_flights",
+        y="airline_name",
+        orientation="h",  # horizontal bars
+        title="Airline Market Share (Total Flights)",
+        labels={"num_flights": "Number of Flights", "airline_name": "Airline"},
+        hover_data=["percentage"],  # show percentage on hover
+        text="num_flights"          # display the number of flights on the bar
+    )
+
+    # Place the text inside or outside the bars as desired
+    fig.update_traces(
+        textposition="outside"
+    )
+
+    # Reverse the Y-axis so the largest bar is at the top
+    fig.update_layout(
+        yaxis=dict(autorange="reversed")
+    )
+
+    st.plotly_chart(fig)
+####################################### MONTHLY FLIGHTS PER AIRLINE ######################
+def display_flights_by_month():
+    """
+    Displays a bar chart showing flight counts by month, 
+    optionally filtered by a selected airline.
+    """
+    st.header("Monthly Flight Trends", divider="gray")
+    
+    # Retrieve distinct airline names from the airlines table.
+    query_airlines = "SELECT DISTINCT name FROM airlines"
+    airlines_df = get_df_from_database(query_airlines)
+    airline_options = ["All Airlines"] + sorted(airlines_df["name"].tolist())
+    
+    # Allow user to filter by airline.
+    selected_airline = st.selectbox("Filter by Airline", airline_options, index=0)
+    
+    # Query flights to count flights by month.
+    if selected_airline == "All Airlines":
+        query_flights = """
+            SELECT month, COUNT(*) AS num_flights 
+            FROM flights 
+            GROUP BY month 
+            ORDER BY month
+        """
+        df = get_df_from_database(query_flights)
+    else:
+        # Retrieve the carrier code corresponding to the selected airline.
+        query_carrier = f"SELECT carrier FROM airlines WHERE name = '{selected_airline}'"
+        carrier_df = get_df_from_database(query_carrier)
+        if carrier_df.empty:
+            st.warning("Selected airline not found in airlines table.")
+            return
+        carrier_code = carrier_df.iloc[0]["carrier"]
+        
+        query_flights = f"""
+            SELECT month, COUNT(*) AS num_flights 
+            FROM flights 
+            WHERE carrier = '{carrier_code}'
+            GROUP BY month 
+            ORDER BY month
+        """
+        df = get_df_from_database(query_flights)
+    
+    if df.empty:
+        st.warning("No flight data available for the selected criteria.")
+        return
+
+    # Create a bar chart using Plotly Express
+    fig = px.bar(
+        df,
+        x="month",
+        y="num_flights",
+        title=f"Flight Counts by Month {'(All Airlines)' if selected_airline == 'All Airlines' else f'for {selected_airline}'}",
+        labels={"month": "Month", "num_flights": "Number of Flights"},
+        text="num_flights"
+    )
+    
+    fig.update_traces(texttemplate="%{text}", textposition="outside")
+    
+    st.plotly_chart(fig)
 
 
 
@@ -209,8 +320,7 @@ def display_top_manufacturers_for_destination():
 def display_plane_statistics():
     """
     Updates the planes table with calculated average speeds
-    and displays a bar chart showing the top 10 fastest plane models,
-    color-coded by manufacturer, with additional hover data.
+    and displays a bar chart showing the top 10 fastest plane models.
     """
     part3.calculate_average_plane_speed()
 
@@ -778,6 +888,7 @@ def initialize_page():
     st.title('Flight Information Dashboard')
 
     display_flight_statistics()  # Add statistics section
+    display_airline_market_share() # show airline flights didtribution
     # Load airports data
     query = 'SELECT faa, name, lat, lon, tzone FROM airports'
     all_airports_df = get_df_from_database(query)
@@ -997,6 +1108,7 @@ def main():
     create_sidebar()   # Initializes the sidebar separately
     time_based_statistics()  # Displays time-based statistics
     display_departure_delay_comparison()  # Displays departure delay comparison
+    display_flights_by_month()
     display_top_manufacturers_for_destination()
     display_plane_statistics()
 
