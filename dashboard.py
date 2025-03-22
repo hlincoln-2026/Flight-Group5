@@ -31,7 +31,6 @@ def get_airport_name(faa):
         return faa  # Fallback if no record found
 
 
-
 def get_flight_statistics():
     query = """
         SELECT origin, dest, carrier, distance
@@ -46,35 +45,51 @@ def get_flight_statistics():
     total_flights = len(df)
     unique_destinations = df['dest'].nunique()
 
-    # Get the FAA codes for these destinations
-    most_visited_faa = df['dest'].value_counts().idxmax()
-    least_visited_faa = df['dest'].value_counts().idxmin()
-    furthest_dest_faa = df.loc[df['distance'].idxmax(), 'dest']
-    closest_dest_faa = df.loc[df['distance'].idxmin(), 'dest']
 
-    # Convert each FAA code to "FAA - Airport Name"
-    most_visited = f"{most_visited_faa} - {get_airport_name(most_visited_faa)}"
-    least_visited = f"{least_visited_faa} - {get_airport_name(least_visited_faa)}"
-    furthest_dest = f"{furthest_dest_faa} - {get_airport_name(furthest_dest_faa)}"
-    closest_dest = f"{closest_dest_faa} - {get_airport_name(closest_dest_faa)}"
 
-    busiest_airline = df['carrier'].value_counts().idxmax()  
-    busiest_airline_name = get_carrier_name(busiest_airline)
+    # Longest and shortest flights
+    longest_flight = df.loc[df['distance'].idxmax()]
+    shortest_flight = df.loc[df['distance'].idxmin()]
 
-    # Compile your stats
+    longest_flight = f"{get_airport_name(longest_flight['origin'])} ({longest_flight['origin']})  → {get_airport_name(longest_flight['dest'])} ({longest_flight['dest']})"
+    shortest_flight = f"{get_airport_name(shortest_flight['origin'])} ({shortest_flight['origin']})  → {get_airport_name(shortest_flight['dest'])} ({shortest_flight['dest']})"
+
+    # Calculate the most and least frequent routes by grouping on both origin and destination
+    route_counts = df.groupby(["origin", "dest"]).size()
+    most_frequent_route_tuple = route_counts.idxmax()  # (origin, dest)
+    least_frequent_route_tuple = route_counts.idxmin()  # (origin, dest)
+
+
+
+    most_frequent_route = (
+        f"{get_airport_name(most_frequent_route_tuple[0])} ({most_frequent_route_tuple[0]}) → "
+        f"{get_airport_name(most_frequent_route_tuple[1])} ({most_frequent_route_tuple[1]})"
+    )
+    least_frequent_route = (
+        f"{get_airport_name(least_frequent_route_tuple[0])} ({least_frequent_route_tuple[0]}) → "
+        f"{get_airport_name(least_frequent_route_tuple[1])} ({least_frequent_route_tuple[1]})"
+    )
+
+
+    # Compute highest and lowest volume carriers
+    carrier_counts = df['carrier'].value_counts()
+    highest_volume_carrier = carrier_counts.idxmax()
+    lowest_volume_carrier = carrier_counts.idxmin()
+    highest_volume_carrier_name = get_carrier_name(highest_volume_carrier)
+    lowest_volume_carrier_name = get_carrier_name(lowest_volume_carrier)
+
     stats = {
         "Total Flights": total_flights,
         "Unique Destinations": unique_destinations,
-        "Most Visited Destination": most_visited,
-        "Least Visited Destination": least_visited,
-        "Busiest Airline": busiest_airline_name,  # or busiest_airline_name
-        "Furthest Destination": furthest_dest,
-        "Closest Destination": closest_dest
+        "Most Frequent Route": most_frequent_route,
+        "Least Frequent Route": least_frequent_route,
+        "Highest Volume Carrier": highest_volume_carrier_name,
+        "Lowest Volume Carrier": lowest_volume_carrier_name,
+        "Longest Flight": longest_flight,
+        "Shortest Flight": shortest_flight
     }
     
     return stats
-
-
 
 
 def display_flight_statistics():
@@ -83,36 +98,220 @@ def display_flight_statistics():
     """
     st.subheader("Flight Statistics (All Flights)")
     stats = get_flight_statistics()
-    # Convert busiest airline if it's a Series or something similar
-    busiest_airline_value = stats["Busiest Airline"]
-    if isinstance(busiest_airline_value, pd.Series):
-        busiest_airline_value = busiest_airline_value.iloc[0]
+    
+    # Ensure highest/lowest volume carrier are strings
+    highest_volume = stats["Highest Volume Carrier"]
+    lowest_volume = stats["Lowest Volume Carrier"]
+    if isinstance(highest_volume, pd.Series):
+        highest_volume = highest_volume.iloc[0]
+    if isinstance(lowest_volume, pd.Series):
+        lowest_volume = lowest_volume.iloc[0]
 
     stats_table = pd.DataFrame({
         "Statistic": [
             "Total Flights", 
             "Unique Destinations", 
-            "Most Visited Destination",
-            "Least Visited Destination",
-            "Busiest Airline",
-            "Furthest Destination",
-            "Closest Destination"
+            "Most Frequent Route",
+            "Least Frequent Route",
+            "Highest Volume Carrier",
+            "Lowest Volume Carrier",
+            "Longest Flight",
+            "Shortest Flight"
         ],
         "Value": [
             stats["Total Flights"],
             stats["Unique Destinations"],
-            stats["Most Visited Destination"],
-            stats["Least Visited Destination"],
-            busiest_airline_value,
-            stats["Furthest Destination"],
-            stats["Closest Destination"]
+            stats["Most Frequent Route"],
+            stats["Least Frequent Route"],
+            highest_volume,
+            lowest_volume,
+            stats["Longest Flight"],
+            stats["Shortest Flight"]
         ]
     })
     st.table(stats_table)
 
+################################### manufacturer stats per destination  ######################################################
+
+def display_top_manufacturers_for_destination():
+    """
+    Displays a bar chart of the top 5 airplane manufacturers 
+    for flights departing to a selected international destination.
+
+    """
+    st.header("International Airport Destination Manufacturer Analysis", divider="gray")
+    
+    # Retrieve only international airports (those with "international" in the name)
+    airports_query = "SELECT faa, name FROM airports WHERE lower(name) LIKE '%international%'"
+    airports_df = get_df_from_database(airports_query)
+    
+    # Let the user select a destination airport by name from the filtered international airports
+    dest = st.selectbox("Select International Destination Airport", airports_df['name'], index=0, placeholder="Enter destination name")
+    if dest:
+        # Retrieve the FAA code for the selected destination
+        faa = airports_df[airports_df['name'] == dest]['faa'].item()
+        
+        # Query flights with the selected destination FAA code
+        query_flights = f"SELECT tailnum FROM flights WHERE dest = '{faa}'"
+        flights_df = get_df_from_database(query_flights)
+        
+        if flights_df.empty:
+            st.warning("No flights found for this destination.")
+            return
+        
+        # Retrieve planes data including manufacturer information
+        query_planes = "SELECT tailnum, manufacturer FROM planes"
+        planes_df = get_df_from_database(query_planes)
+        
+        # Merge flights and planes data on tailnum
+        merged_df = pd.merge(flights_df, planes_df, on="tailnum", how="left")
+        
+        if merged_df.empty or merged_df['manufacturer'].isnull().all():
+            st.warning("No manufacturer data available for flights to this destination.")
+            return
+        
+        # Count the number of flights per manufacturer
+        manufacturer_counts = merged_df['manufacturer'].value_counts().reset_index()
+        manufacturer_counts.columns = ['manufacturer', 'num_flights']
+        
+        # Calculate the percentage of flights for additional insight
+        total = manufacturer_counts['num_flights'].sum()
+        manufacturer_counts['percentage'] = (manufacturer_counts['num_flights'] / total * 100).round(2)
+        
+        # Select the top 5 manufacturers
+        top5 = manufacturer_counts.head(5)
+        
+        # Create a bar chart using Plotly Express with extra hover data
+        fig = px.bar(
+            top5, 
+            x="manufacturer", 
+            y="num_flights", 
+            title=f"Top 5 Manufacturers for {dest}",
+            labels={"manufacturer": "Manufacturer", "num_flights": "Number of Flights"},
+            text="num_flights",
+            color="manufacturer",
+            hover_data={"percentage": True}
+        )
+        
+        fig.update_traces(
+            texttemplate="%{text}",
+            textposition="outside"
+        )
+        fig.update_layout(xaxis_tickangle=-45)
+        
+        st.plotly_chart(fig)
+
+#################################### airline market share ############################
+
+def display_airline_market_share():
+    """
+    Displays a horizontal bar chart showing the share of total flights for each airline,
+    leveraging the airlines table for airline names.
+    """
+
+    query = """
+        SELECT a.name AS airline_name,
+               COUNT(*) AS num_flights
+        FROM flights f
+        JOIN airlines a ON f.carrier = a.carrier
+        GROUP BY a.name
+    """
+    df = get_df_from_database(query)
+
+    if df.empty:
+        st.warning("No flight data available.")
+        return
 
 
-#########################################################################################
+    df = df.sort_values("num_flights", ascending=False)
+
+   
+    total_flights = df["num_flights"].sum()
+    df["percentage"] = (df["num_flights"] / total_flights * 100).round(2)
+
+    # Create a horizontal bar chart 
+    fig = px.bar(
+        df,
+        x="num_flights",
+        y="airline_name",
+        orientation="h",  # horizontal bars
+        title="Airline Market Share (Total Flights)",
+        labels={"num_flights": "Number of Flights", "airline_name": "Airline"},
+        hover_data=["percentage"],  # show percentage on hover
+        text="num_flights"          # display the number of flights on the bar
+    )
+
+    # Place the text inside or outside the bars as desired
+    fig.update_traces(
+        textposition="outside"
+    )
+
+    # Reverse the Y-axis so the largest bar is at the top
+    fig.update_layout(
+        yaxis=dict(autorange="reversed")
+    )
+
+    st.plotly_chart(fig)
+####################################### MONTHLY FLIGHTS PER AIRLINE ######################
+def display_flights_by_month():
+    """
+    Displays a bar chart showing flight counts by month, 
+    optionally filtered by a selected airline.
+    """
+    st.header("Monthly Flight Trends", divider="gray")
+    
+    # Retrieve distinct airline names from the airlines table.
+    query_airlines = "SELECT DISTINCT name FROM airlines"
+    airlines_df = get_df_from_database(query_airlines)
+    airline_options = ["All Airlines"] + sorted(airlines_df["name"].tolist())
+    
+    # Allow user to filter by airline.
+    selected_airline = st.selectbox("Filter by Airline", airline_options, index=0)
+    
+    # Query flights to count flights by month.
+    if selected_airline == "All Airlines":
+        query_flights = """
+            SELECT month, COUNT(*) AS num_flights 
+            FROM flights 
+            GROUP BY month 
+            ORDER BY month
+        """
+        df = get_df_from_database(query_flights)
+    else:
+        # Retrieve the carrier code corresponding to the selected airline.
+        query_carrier = f"SELECT carrier FROM airlines WHERE name = '{selected_airline}'"
+        carrier_df = get_df_from_database(query_carrier)
+        if carrier_df.empty:
+            st.warning("Selected airline not found in airlines table.")
+            return
+        carrier_code = carrier_df.iloc[0]["carrier"]
+        
+        query_flights = f"""
+            SELECT month, COUNT(*) AS num_flights 
+            FROM flights 
+            WHERE carrier = '{carrier_code}'
+            GROUP BY month 
+            ORDER BY month
+        """
+        df = get_df_from_database(query_flights)
+    
+    if df.empty:
+        st.warning("No flight data available for the selected criteria.")
+        return
+
+    # Create a bar chart using Plotly Express
+    fig = px.bar(
+        df,
+        x="month",
+        y="num_flights",
+        title=f"Flight Counts by Month {'(All Airlines)' if selected_airline == 'All Airlines' else f'for {selected_airline}'}",
+        labels={"month": "Month", "num_flights": "Number of Flights"},
+        text="num_flights"
+    )
+    
+    fig.update_traces(texttemplate="%{text}", textposition="outside")
+    
+    st.plotly_chart(fig)
 
 
 
@@ -121,8 +320,7 @@ def display_flight_statistics():
 def display_plane_statistics():
     """
     Updates the planes table with calculated average speeds
-    and displays a bar chart showing the top 10 fastest plane models,
-    color-coded by manufacturer, with additional hover data.
+    and displays a bar chart showing the top 10 fastest plane models.
     """
     part3.calculate_average_plane_speed()
 
@@ -699,6 +897,7 @@ def initialize_page():
     st.title('Flight Information Dashboard')
 
     display_flight_statistics()  # Add statistics section
+    display_airline_market_share() # show airline flights didtribution
     # Load airports data
     query = 'SELECT faa, name, lat, lon, tzone FROM airports'
     all_airports_df = get_df_from_database(query)
@@ -925,6 +1124,8 @@ def main():
     create_sidebar()   # Initializes the sidebar separately
     time_based_statistics()  # Displays time-based statistics
     display_departure_delay_comparison()  # Displays departure delay comparison
+    display_flights_by_month()
+    display_top_manufacturers_for_destination()
     display_plane_statistics()
 
 
