@@ -418,12 +418,17 @@ def display_delay_chart(df):
 
     df['hour'] = (df['dep_time'] // 100) % 24
     df_grouped = df.groupby('hour')['dep_delay'].mean().reset_index()
+    df_grouped['hour'] = df_grouped['hour'].apply(format_hour_label)
 
-    st.subheader("Average Delay on Selected Date")
+    # st.subheader("Average Delay on Selected Date")
     fig = px.line(df_grouped, x='hour', y='dep_delay', markers=True, 
                   labels={'hour': 'Hour of Day', 'dep_delay': 'Average Delay (minutes)'})
-    st.plotly_chart(fig)
 
+    fig.update_xaxes(
+    tickvals=[f"{h:02d}:00" for h in range(0, 24, 4)],
+    range=["00:00", "24:00"]
+    )
+    st.plotly_chart(fig)
 
 
 
@@ -438,7 +443,7 @@ def display_weather_info(selected_airport, month, day):
     """
     weather_df = get_df_from_database(query)
 
-    st.subheader("Weather on Selected Date")
+    st.subheader("Weather Forecast")
 
     if not weather_df.empty:
         # Convert values to numeric (handling potential string values)
@@ -458,14 +463,11 @@ def display_weather_info(selected_airport, month, day):
         vis_max = np.ceil(weather_df['visib'].max()) if not np.isnan(weather_df['visib'].max()) else 0
 
         st.markdown(f"""
-        **Temperature (°C):**  
-        - Low: {int(temp_min)}, Avg: {int(temp_mean)}, High: {int(temp_max)}  
+        **Temperature (°C)**:  Low: {int(temp_min)} | Avg: {int(temp_mean)} | High: {int(temp_max)}  
 
-        **Wind Speed (km/h):**  
-        - Low: {int(wind_min)}, Avg: {int(wind_mean)}, High: {int(wind_max)}  
+        **Wind Speed (km/h)**:  Low: {int(wind_min)} | Avg: {int(wind_mean)} | High: {int(wind_max)}  
 
-        **Visibility (km):**  
-        - Low: {int(vis_min)}, Avg: {int(vis_mean)}, High: {int(vis_max)}  
+        **Visibility (km)**:  Low: {int(vis_min)} | Avg: {int(vis_mean)} | High: {int(vis_max)}  
         """)
     else:
         st.text("No weather data available.")
@@ -500,46 +502,21 @@ def display_departure_times(df):
     """)
 
 
-def get_selected_date():
-    """Returns the user-selected date as (month, day), or (None, None) if not selected."""
-    selected_date = st.sidebar.date_input("Select a date")
+def format_hour_label(hour):
+    """Formats a numeric hour into HH:MM string (e.g., 9 → '09:00')."""
+    return f"{int(hour):02d}:00"
 
-    # If the user has not interacted with the date picker, return None
+
+
+def get_selected_date():
+    """Returns the globally selected date from the sidebar as (month, day), or (None, None) if not available."""
+    selected_date = st.session_state.get("selected_date", None)
+
     if not selected_date:
         return None, None
     
     return selected_date.month, selected_date.day
 
-
-
-
-def time_based_statistics():
-    """Displays statistics for departure airports only."""
-    st.header("Statistics as a Function of Time", divider='gray')
-
-    selected_departure = st.session_state.get("fd_origin")
-
-    if not selected_departure:
-        st.warning("Please select a departure airport in the sidebar.")
-        return
-
-    # 🔹 Use the new function to get the selected date
-    month, day = get_selected_date()
-
-    departure_faa = get_faa(selected_departure)
-    if departure_faa:
-        st.subheader(f"Departure Statistics for {selected_departure}")
-        df = get_flight_delays(departure_faa, month, day)
-
-        if not df.empty:
-            col1, col2 = st.columns([0.7, 0.3])
-            with col1:
-                display_delay_chart(df)
-            with col2:
-                display_weather_info(departure_faa, month, day)
-                display_departure_times(df)
-        else:
-            st.warning(f"No flight data available for {selected_departure} on {month}/{day}.")
 
 
 
@@ -553,19 +530,22 @@ def time_based_statistics():
     selected_departure = st.session_state.get("fd_origin")
 
     if not selected_departure:
-        st.warning("Please select a departure airport in the sidebar.")
+        st.warning("Please select a departure airport.")
         return
 
-    selected_date = st.sidebar.date_input("Select a date", value=pd.to_datetime("2023-01-01"))
-    month, day = selected_date.month, selected_date.day
+    month, day = get_selected_date()
+    if month is None or day is None:
+        st.warning("Please select a date.")
+        return
+
 
     departure_faa = get_faa(selected_departure)
     if departure_faa:
-        st.subheader(f"Departure Statistics for {selected_departure}")
+        st.subheader(f"Delay Statistics for {selected_departure}")
         df = get_flight_delays(departure_faa, month, day)
 
         if not df.empty:
-            col1, col2 = st.columns([0.7, 0.3])
+            col1, spacer, col2 = st.columns([0.65, 0.05, 0.3])
             with col1:
                 display_delay_chart(df)
             with col2:
@@ -601,26 +581,22 @@ def get_flight_delays_multiple(airport_faa_list, month, day):
 
 def display_departure_delay_comparison():
     """Displays a line graph comparing departure delays for three major airports only after a date is selected."""
-    st.subheader("Comparison of Departure Delays Across Airports")
+    st.subheader("Comparison of Departure Delays Across JFK, LaGuardia and Newark")
 
-    # 🔹 Check if the user has selected a date
-    month, day = get_selected_date()
+        # 🔹 Check if the user has selected a date
+    if "selected_date" not in st.session_state:
+        st.info("Please, select a date from the sidebar.")
+        return
 
-    if month is None or day is None:
-        st.warning("Please select a departure date in the sidebar.")
-        return  # Stop execution until the user selects a date
+    selected_date = st.session_state["selected_date"]
 
-
-    # if not get_selected_date():
-    #     st.warning("Please select a departure date in the sidebar.")
-    #     return  # Stop execution until the user selects a date
-
-
-    # if not selected_departure:
-    #     st.warning("Please select a departure airport in the sidebar.")
-    #     return
-
-
+    if not selected_date:
+        st.info("Please, select a date from the sidebar.")
+        return
+    
+    # Extract month and day from the selected date
+    month = selected_date.month
+    day = selected_date.day
 
     # Define the three NYC airports
     nyc_airports_faa = ['JFK', 'LGA', 'EWR']  # FAA codes for JFK, LaGuardia, and Newark
@@ -632,20 +608,53 @@ def display_departure_delay_comparison():
         st.warning(f"No flight delay data available for {month}/{day}.")
         return
 
-    # Group by hour and airport, then compute the average delay
-    df_grouped = df.groupby(['hour', 'origin'])['dep_delay'].mean().reset_index()
+    # Create numeric hour and string hour label
+    df['hour_numeric'] = (df['dep_time'] // 100) % 24
+    df['hour_label'] = df['hour_numeric'].apply(lambda h: f"{h:02d}:00")
 
-    # Plot using Plotly
-    fig = px.line(df_grouped, x='hour', y='dep_delay', color='origin',
-                  labels={'hour': 'Hour of Day', 'dep_delay': 'Average Delay (minutes)', 'origin': 'Airport'},
-                  markers=True, title="Average Departure Delays Throughout the Day")
+    # Group and aggregate
+    df_grouped = df.groupby(['hour_numeric', 'hour_label', 'origin'])['dep_delay'].mean().reset_index()
+
+
+    # Define custom colors
+    color_map = {
+        'JFK': '#2A61C6',  # default blue
+        'LGA': '#90C5FD',  # light blue
+        'EWR': '#000080'   # navy
+    }
+
+    # Plot
+    fig = px.line(
+        df_grouped,
+        x='hour_label',
+        y='dep_delay',
+        color='origin',
+        labels={'hour_label': 'Hour of Day', 'dep_delay': 'Average Delay (minutes)', 'origin': 'Airport'},
+        markers=True,
+        color_discrete_map=color_map  
+    )
+
+    # Tick labels every 4 hours
+    tick_labels = [f"{h:02d}:00" for h in range(0, 24, 4)]
+    fig.update_xaxes(
+        categoryorder='array',
+        categoryarray=[f"{h:02d}:00" for h in range(0, 24)],
+        tickvals=tick_labels,
+        ticktext=tick_labels,
+        title='Hour of Day'
+    )
+
+    # Make legend larger and clearer
+    fig.update_layout(
+        legend=dict(
+            font=dict(size=16),       # Larger font size
+            bgcolor="White",          # Optional background color
+            bordercolor="LightGray",  # Optional border
+            borderwidth=1
+        )
+    )
 
     st.plotly_chart(fig)
-
-
-
-
-
 
 
 
@@ -835,6 +844,13 @@ def create_sidebar():
         departure = st.selectbox('Departure', nyc_airports, index=None, placeholder='Enter departing airport name')
         arrival = st.selectbox('Arrival', other_airports, index=None, placeholder='Enter arriving airport name')
         
+        # Limit date selection to 2023 only
+        min_date = pd.to_datetime("2023-01-01")
+        max_date = pd.to_datetime("2023-12-31")
+        selected_date = st.date_input("Select a date", min_value=min_date, max_value=max_date)
+        st.session_state["selected_date"] = selected_date
+
+    
         # Update session state to store the selected airport
         if departure:
             st.session_state["fd_origin"] = departure  # Store departure airport in session state
@@ -885,7 +901,7 @@ def create_sidebar():
                             st.session_state.fd_start -= 10
                             st.rerun()
                 with col2:
-                    if st.button('View More'):
+                    if st.button('View Next'):
                         if st.session_state.fd_start + 10 < end:
                             st.session_state.fd_start += 10
                             st.rerun()
