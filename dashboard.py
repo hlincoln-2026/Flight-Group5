@@ -131,7 +131,76 @@ def display_flight_statistics():
     })
     st.table(stats_table)
 
-#########################################################################################
+################################### manufacturer stats per destination  ######################################################
+
+def display_top_manufacturers_for_destination():
+    """
+    Displays a bar chart of the top 5 airplane manufacturers 
+    for flights departing to a selected international destination.
+
+    """
+    st.header("International Destination Manufacturer Analysis", divider="gray")
+    
+    # Retrieve only international airports (those with "international" in the name)
+    airports_query = "SELECT faa, name FROM airports WHERE lower(name) LIKE '%international%'"
+    airports_df = get_df_from_database(airports_query)
+    
+    # Let the user select a destination airport by name from the filtered international airports
+    dest = st.selectbox("Select International Destination Airport", airports_df['name'], index=0, placeholder="Enter destination name")
+    if dest:
+        # Retrieve the FAA code for the selected destination
+        faa = airports_df[airports_df['name'] == dest]['faa'].item()
+        
+        # Query flights with the selected destination FAA code
+        query_flights = f"SELECT tailnum FROM flights WHERE dest = '{faa}'"
+        flights_df = get_df_from_database(query_flights)
+        
+        if flights_df.empty:
+            st.warning("No flights found for this destination.")
+            return
+        
+        # Retrieve planes data including manufacturer information
+        query_planes = "SELECT tailnum, manufacturer FROM planes"
+        planes_df = get_df_from_database(query_planes)
+        
+        # Merge flights and planes data on tailnum
+        merged_df = pd.merge(flights_df, planes_df, on="tailnum", how="left")
+        
+        if merged_df.empty or merged_df['manufacturer'].isnull().all():
+            st.warning("No manufacturer data available for flights to this destination.")
+            return
+        
+        # Count the number of flights per manufacturer
+        manufacturer_counts = merged_df['manufacturer'].value_counts().reset_index()
+        manufacturer_counts.columns = ['manufacturer', 'num_flights']
+        
+        # Calculate the percentage of flights for additional insight
+        total = manufacturer_counts['num_flights'].sum()
+        manufacturer_counts['percentage'] = (manufacturer_counts['num_flights'] / total * 100).round(2)
+        
+        # Select the top 5 manufacturers
+        top5 = manufacturer_counts.head(5)
+        
+        # Create a bar chart using Plotly Express with extra hover data
+        fig = px.bar(
+            top5, 
+            x="manufacturer", 
+            y="num_flights", 
+            title=f"Top 5 Manufacturers for {dest}",
+            labels={"manufacturer": "Manufacturer", "num_flights": "Number of Flights"},
+            text="num_flights",
+            color="manufacturer",
+            hover_data={"percentage": True}
+        )
+        
+        fig.update_traces(
+            texttemplate="%{text}",
+            textposition="outside"
+        )
+        fig.update_layout(xaxis_tickangle=-45)
+        
+        st.plotly_chart(fig)
+
 
 
 
@@ -928,6 +997,7 @@ def main():
     create_sidebar()   # Initializes the sidebar separately
     time_based_statistics()  # Displays time-based statistics
     display_departure_delay_comparison()  # Displays departure delay comparison
+    display_top_manufacturers_for_destination()
     display_plane_statistics()
 
 
