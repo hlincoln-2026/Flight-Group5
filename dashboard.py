@@ -31,7 +31,6 @@ def get_airport_name(faa):
         return faa  # Fallback if no record found
 
 
-
 def get_flight_statistics():
     query = """
         SELECT origin, dest, carrier, distance
@@ -46,35 +45,51 @@ def get_flight_statistics():
     total_flights = len(df)
     unique_destinations = df['dest'].nunique()
 
-    # Get the FAA codes for these destinations
-    most_visited_faa = df['dest'].value_counts().idxmax()
-    least_visited_faa = df['dest'].value_counts().idxmin()
-    furthest_dest_faa = df.loc[df['distance'].idxmax(), 'dest']
-    closest_dest_faa = df.loc[df['distance'].idxmin(), 'dest']
 
-    # Convert each FAA code to "FAA - Airport Name"
-    most_visited = f"{most_visited_faa} - {get_airport_name(most_visited_faa)}"
-    least_visited = f"{least_visited_faa} - {get_airport_name(least_visited_faa)}"
-    furthest_dest = f"{furthest_dest_faa} - {get_airport_name(furthest_dest_faa)}"
-    closest_dest = f"{closest_dest_faa} - {get_airport_name(closest_dest_faa)}"
 
-    busiest_airline = df['carrier'].value_counts().idxmax()  
-    busiest_airline_name = get_carrier_name(busiest_airline)
+    # Longest and shortest flights
+    longest_flight = df.loc[df['distance'].idxmax()]
+    shortest_flight = df.loc[df['distance'].idxmin()]
 
-    # Compile your stats
+    longest_flight = f"{get_airport_name(longest_flight['origin'])} ({longest_flight['origin']})  → {get_airport_name(longest_flight['dest'])} ({longest_flight['dest']})"
+    shortest_flight = f"{get_airport_name(shortest_flight['origin'])} ({shortest_flight['origin']})  → {get_airport_name(shortest_flight['dest'])} ({shortest_flight['dest']})"
+
+    # Calculate the most and least frequent routes by grouping on both origin and destination
+    route_counts = df.groupby(["origin", "dest"]).size()
+    most_frequent_route_tuple = route_counts.idxmax()  # (origin, dest)
+    least_frequent_route_tuple = route_counts.idxmin()  # (origin, dest)
+
+
+    # Format routes to include FAA code and airport name for both origin and destination
+    most_frequent_route = (
+        f"{get_airport_name(most_frequent_route_tuple[0])} ({most_frequent_route_tuple[0]}) → "
+        f"{get_airport_name(most_frequent_route_tuple[1])} ({most_frequent_route_tuple[1]})"
+    )
+    least_frequent_route = (
+        f"{get_airport_name(least_frequent_route_tuple[0])} ({least_frequent_route_tuple[0]}) → "
+        f"{get_airport_name(least_frequent_route_tuple[1])} ({least_frequent_route_tuple[1]})"
+    )
+
+
+    # Compute highest and lowest volume carriers using corporate phrasing
+    carrier_counts = df['carrier'].value_counts()
+    highest_volume_carrier = carrier_counts.idxmax()
+    lowest_volume_carrier = carrier_counts.idxmin()
+    highest_volume_carrier_name = get_carrier_name(highest_volume_carrier)
+    lowest_volume_carrier_name = get_carrier_name(lowest_volume_carrier)
+
     stats = {
         "Total Flights": total_flights,
         "Unique Destinations": unique_destinations,
-        "Most Visited Destination": most_visited,
-        "Least Visited Destination": least_visited,
-        "Busiest Airline": busiest_airline_name,  # or busiest_airline_name
-        "Furthest Destination": furthest_dest,
-        "Closest Destination": closest_dest
+        "Most Frequent Route": most_frequent_route,
+        "Least Frequent Route": least_frequent_route,
+        "Highest Volume Carrier": highest_volume_carrier_name,
+        "Lowest Volume Carrier": lowest_volume_carrier_name,
+        "Longest Flight": longest_flight,
+        "Shortest Flight": shortest_flight
     }
     
     return stats
-
-
 
 
 def display_flight_statistics():
@@ -83,34 +98,38 @@ def display_flight_statistics():
     """
     st.subheader("Flight Statistics (All Flights)")
     stats = get_flight_statistics()
-    # Convert busiest airline if it's a Series or something similar
-    busiest_airline_value = stats["Busiest Airline"]
-    if isinstance(busiest_airline_value, pd.Series):
-        busiest_airline_value = busiest_airline_value.iloc[0]
+    
+    # Ensure highest/lowest volume carrier are strings
+    highest_volume = stats["Highest Volume Carrier"]
+    lowest_volume = stats["Lowest Volume Carrier"]
+    if isinstance(highest_volume, pd.Series):
+        highest_volume = highest_volume.iloc[0]
+    if isinstance(lowest_volume, pd.Series):
+        lowest_volume = lowest_volume.iloc[0]
 
     stats_table = pd.DataFrame({
         "Statistic": [
             "Total Flights", 
             "Unique Destinations", 
-            "Most Visited Destination",
-            "Least Visited Destination",
-            "Busiest Airline",
-            "Furthest Destination",
-            "Closest Destination"
+            "Most Frequent Route",
+            "Least Frequent Route",
+            "Highest Volume Carrier",
+            "Lowest Volume Carrier",
+            "Longest Flight",
+            "Shortest Flight"
         ],
         "Value": [
             stats["Total Flights"],
             stats["Unique Destinations"],
-            stats["Most Visited Destination"],
-            stats["Least Visited Destination"],
-            busiest_airline_value,
-            stats["Furthest Destination"],
-            stats["Closest Destination"]
+            stats["Most Frequent Route"],
+            stats["Least Frequent Route"],
+            highest_volume,
+            lowest_volume,
+            stats["Longest Flight"],
+            stats["Shortest Flight"]
         ]
     })
     st.table(stats_table)
-
-
 
 #########################################################################################
 
