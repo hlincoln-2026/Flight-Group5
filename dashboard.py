@@ -467,7 +467,7 @@ def average_daily_flights(airport=None):
 
     daily_average = round(total_flights / total_days, 2)
 
-    return daily_average
+    return int(daily_average)
 
     
 def average_monthly_flights(airport=None):
@@ -489,7 +489,7 @@ def average_monthly_flights(airport=None):
         current_month += 1
 
     average = round(total_size / len(months),2)
-    return average
+    return int(average)
 
 # def get_nyc_names():
 #     nyc_lst = ['FOK','ISP','FRG','JFK','LGA','HPN','MGJ','SWF','BGM','ELM','ITH','JHW',
