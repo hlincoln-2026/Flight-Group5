@@ -401,5 +401,5 @@ def main():
     save_daily_temperatures_to_db(merged_df)
     verify_temperature_columns()
 
-if __name__ == "__main__":
+if __name__ == "__main__": 
     main()
