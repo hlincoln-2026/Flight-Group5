@@ -851,11 +851,12 @@ def display_departure_delay_comparison_custom(month, day):
     )
 
     fig.update_layout(
-        legend=dict(font=dict(size=16), bgcolor="White", bordercolor="LightGray", borderwidth=1),
+        legend=dict(font=dict(size=16,color="black"), bgcolor="White", bordercolor="LightGray", borderwidth=1),
         hoverlabel=dict(font_size=16),
         xaxis_title="Hour of Day",
         yaxis_title="Avg Delay (minutes)"
     )
+    
     st.plotly_chart(fig)
 
 
