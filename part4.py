@@ -1,5 +1,11 @@
 import sqlite3
 import pandas as pd
+import openmeteo_requests
+import requests_cache
+from retry_requests import retry
+import numpy as np
+import matplotlib.pyplot as plt
+
 
 
 '''
@@ -48,9 +54,6 @@ def find_duplicants():
 
 
 find_duplicants()
-
-import numpy as np
-import matplotlib.pyplot as plt
 
 
 
@@ -211,3 +214,192 @@ def analyze_most_frequent_routes(conn):
 def analyze_weather_vs_delay(conn):
 	pass
 
+
+###########  Import missing temperature entries  for JFK, LGA, EWR  ###########
+
+
+# Setup Open-Meteo client
+cache_session = requests_cache.CachedSession('.cache', expire_after=-1)
+retry_session = retry(cache_session, retries=5, backoff_factor=0.2)
+openmeteo = openmeteo_requests.Client(session=retry_session)
+
+DB_PATH = "flights_database.db"
+
+
+# Define coordinates
+airport_coords = {
+    "JFK": {"latitude": 40.6398, "longitude": -73.7787},
+    "LGA": {"latitude": 40.7769, "longitude": -73.8740},
+    "EWR": {"latitude": 40.6895, "longitude": -74.1745}
+}
+
+def fetch_hourly_temperature(airport_code, lat, lon):
+    """Fetch hourly temperature data from Open-Meteo API."""
+    url = "https://archive-api.open-meteo.com/v1/archive"
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "start_date": "2023-01-01",
+        "end_date": "2023-12-31",
+        "hourly": "temperature_2m",
+        "temperature_unit": "fahrenheit"
+    }
+
+    try:
+        responses = openmeteo.weather_api(url, params=params)
+        response = responses[0]
+        hourly = response.Hourly()
+
+        if not hourly or hourly.Variables(0).ValuesAsNumpy().size == 0:
+            print(f"[WARNING] No data for {airport_code}")
+            return pd.DataFrame()
+
+        time_range = pd.date_range(
+            start=pd.to_datetime(hourly.Time(), unit="s", utc=True),
+            end=pd.to_datetime(hourly.TimeEnd(), unit="s", utc=True),
+            freq=pd.Timedelta(seconds=hourly.Interval()),
+            inclusive="left"
+        )
+
+        df = pd.DataFrame({
+            "datetime": time_range,
+            "temperature_2m": hourly.Variables(0).ValuesAsNumpy(),
+            "airport": airport_code
+        })
+        df["date"] = df["datetime"].dt.date
+        return df
+
+    except Exception as e:
+        print(f"[ERROR] Fetch failed for {airport_code}: {e}")
+        return pd.DataFrame()
+
+def aggregate_daily_temperatures(df):
+    return df.groupby(["airport", "date"])["temperature_2m"].agg(
+        temp_min="min",
+        temp_avg="mean",
+        temp_max="max"
+    ).reset_index()
+
+def get_openmeteo_daily_temperatures():
+    all_data = []
+    for code, coords in airport_coords.items():
+        hourly = fetch_hourly_temperature(code, coords["latitude"], coords["longitude"])
+        if not hourly.empty:
+            all_data.append(aggregate_daily_temperatures(hourly))
+    return pd.concat(all_data, ignore_index=True) if all_data else pd.DataFrame()
+
+def load_weather_from_db():
+    conn = sqlite3.connect(DB_PATH)
+    df = pd.read_sql_query("SELECT * FROM weather", conn)
+    conn.close()
+    return df
+
+def merge_and_fill_weather(weather_df, temp_df):
+    """Merge temperature data and fill missing temperature values (only for JFK, LGA, EWR)."""
+
+    if weather_df.empty:
+        print("[WARNING] Weather table from database is empty. Skipping merge.")
+        return pd.DataFrame()
+
+    if temp_df.empty:
+        print("[WARNING] Open-Meteo temperature data is empty. Skipping merge.")
+        return weather_df
+
+    # Normalize keys for merging
+    weather_df["origin"] = weather_df["origin"].str.strip().str.upper()
+    temp_df["airport"] = temp_df["airport"].str.strip().str.upper()
+
+    # Add 'date' to weather_df
+    weather_df["date"] = pd.to_datetime({
+        "year": 2023,
+        "month": weather_df["month"],
+        "day": weather_df["day"]
+    }).dt.date
+
+    # Merge: will only fill data for JFK, LGA, EWR
+    merged = weather_df.merge(
+        temp_df,
+        left_on=["origin", "date"],
+        right_on=["airport", "date"],
+        how="left"
+    )
+
+    # Optional: fill missing `temp` only for matched rows
+    if "temp_avg" in merged.columns:
+        merged["temp"] = merged["temp"].fillna(merged["temp_avg"])
+
+    # Debug
+    matched_rows = merged["airport"].notna().sum()
+    print(f"[INFO] Merged temperature data for {matched_rows} rows (out of {len(merged)}).")
+
+    return merged
+
+
+def ensure_weather_columns(conn):
+    cursor = conn.cursor()
+    for col in ['temp_min', 'temp_avg', 'temp_max']:
+        try:
+            cursor.execute(f"ALTER TABLE weather ADD COLUMN {col} REAL")
+        except sqlite3.OperationalError:
+            pass  # Already exists
+    conn.commit()
+
+
+def save_daily_temperatures_to_db(merged_df, db_path='flights_database.db'):
+    """Adds temp_min, temp_avg, temp_max columns to the weather table and fills them."""
+
+    print("[DEBUG] Columns in merged_df:", merged_df.columns.tolist())  # 🔍 DEBUG LINE
+
+    required_cols = ["temp_min", "temp_avg", "temp_max", "origin", "month", "day"]
+    for col in required_cols:
+        if col not in merged_df.columns:
+            print(f"[ERROR] Missing column in merged_df: {col}")
+    #  Exit early if required columns are missing
+    if not all(col in merged_df.columns for col in required_cols):
+        print("[ABORT] Cannot proceed with saving to DB. Missing required columns.")
+        return
+
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    # Add columns if not exist
+    for col in ['temp_min', 'temp_avg', 'temp_max']:
+        try:
+            cursor.execute(f"ALTER TABLE weather ADD COLUMN {col} REAL")
+        except sqlite3.OperationalError:
+            pass
+
+    # Prepare updates
+    updates = merged_df[required_cols].dropna()
+
+    update_query = """
+        UPDATE weather
+        SET temp_min = ?, temp_avg = ?, temp_max = ?
+        WHERE origin = ? AND month = ? AND day = ?
+    """
+    cursor.executemany(update_query, updates.values.tolist())
+    conn.commit()
+
+    print(f"[INFO] Updated {cursor.rowcount} rows in weather table.")
+    conn.close()
+
+
+def verify_temperature_columns():
+    conn = sqlite3.connect(DB_PATH)
+    df = pd.read_sql_query("SELECT origin, month, day, temp_min, temp_avg, temp_max FROM weather LIMIT 10", conn)
+    conn.close()
+    print(df.head())
+    print(df[["temp_min", "temp_avg", "temp_max"]].isna().sum())
+    return df
+
+
+
+def main():
+    weather_df = load_weather_from_db()
+    temp_df = get_openmeteo_daily_temperatures()
+    merged_df = merge_and_fill_weather(weather_df, temp_df)
+    save_daily_temperatures_to_db(merged_df)
+    verify_temperature_columns()
+
+if __name__ == "__main__": 
+    main()

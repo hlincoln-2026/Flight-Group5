@@ -614,28 +614,52 @@ def display_delay_chart(df):
         st.warning("Flight data is missing 'dep_time'. Cannot display delay chart.")
         return
 
+    # Extract hour from departure time
     df['hour'] = (df['dep_time'] // 100) % 24
-    df_grouped = df.groupby('hour')['dep_delay'].mean().reset_index()
-    df_grouped['hour'] = df_grouped['hour'].apply(format_hour_label)
 
-    # st.subheader("Average Delay on Selected Date")
-    fig = px.line(df_grouped, x='hour', y='dep_delay', markers=True, 
-                  labels={'hour': 'Hour of Day', 'dep_delay': 'Average Delay (minutes)'})
+    # Group by hour and compute average delay
+    df_grouped = df.groupby('hour')['dep_delay'].mean().reset_index()
+    df_grouped['hour_label'] = df_grouped['hour'].apply(format_hour_label)
+    df_grouped['avg_delay_rounded'] = df_grouped['dep_delay'].round(0)
+
+    # Create line chart with custom hover info
+    fig = px.line(
+        df_grouped,
+        x='hour_label',
+        y='avg_delay_rounded',
+        markers=True,
+        labels={'hour_label': 'Hour of Day', 'avg_delay_rounded': 'Avg Delay (min)'},
+        hover_data={'hour_label': False, 'avg_delay_rounded': True}
+    )
+
+    fig.update_traces(
+        hovertemplate='Hour: %{x}<br>Avg Delay: %{y} min<extra></extra>',
+        line=dict(width=3)
+    )
 
     fig.update_xaxes(
-    tickvals=[f"{h:02d}:00" for h in range(0, 24, 4)],
-    range=["00:00", "24:00"]
+        tickvals=[f"{h:02d}:00" for h in range(0, 24, 4)],
+        range=["00:00", "24:00"]
     )
+
+    fig.update_layout(
+        title="",
+        xaxis_title="Hour of Day",
+        yaxis_title="Avg Delay (minutes)",
+        hoverlabel=dict(font_size=16)
+    )
+
     st.plotly_chart(fig)
 
 
 
+
+
 def display_weather_info(selected_airport, month, day):
-    """Fetches and displays weather info for a selected airport and date, rounding up values."""
+    """Displays weather info for an airport and date. Falls back to temp_min/avg/max if temp is missing."""
     
-    # Get weather data from the database
     query = f"""
-        SELECT temp, wind_speed, visib
+        SELECT temp, temp_min, temp_avg, temp_max, wind_speed, visib
         FROM weather
         WHERE month = {month} AND day = {day} AND origin = '{selected_airport}'
     """
@@ -644,13 +668,20 @@ def display_weather_info(selected_airport, month, day):
     st.subheader("Weather Forecast")
 
     if not weather_df.empty:
-        # Convert values to numeric (handling potential string values)
-        weather_df = weather_df.apply(pd.to_numeric, errors='coerce')  # Converts non-numeric values to NaN
+        # Convert to numeric and handle missing gracefully
+        weather_df = weather_df.apply(pd.to_numeric, errors='coerce')
 
-        # Handle NaN values safely: replace NaN with 0 (or another placeholder)
-        temp_min = np.ceil(weather_df['temp'].min()) if not np.isnan(weather_df['temp'].min()) else 0
-        temp_mean = np.ceil(weather_df['temp'].mean()) if not np.isnan(weather_df['temp'].mean()) else 0
-        temp_max = np.ceil(weather_df['temp'].max()) if not np.isnan(weather_df['temp'].max()) else 0
+        # Check if temp column is entirely missing
+        if weather_df["temp"].isna().all():
+            # Use fallback columns
+            temp_min = weather_df["temp_min"].iloc[0] if "temp_min" in weather_df.columns else np.nan
+            temp_avg = weather_df["temp_avg"].iloc[0] if "temp_avg" in weather_df.columns else np.nan
+            temp_max = weather_df["temp_max"].iloc[0] if "temp_max" in weather_df.columns else np.nan
+        else:
+            # Use temp column as usual
+            temp_min = np.ceil(weather_df['temp'].min())
+            temp_avg = np.ceil(weather_df['temp'].mean())
+            temp_max = np.ceil(weather_df['temp'].max())
 
         wind_min = np.ceil(weather_df['wind_speed'].min()) if not np.isnan(weather_df['wind_speed'].min()) else 0
         wind_mean = np.ceil(weather_df['wind_speed'].mean()) if not np.isnan(weather_df['wind_speed'].mean()) else 0
@@ -661,14 +692,14 @@ def display_weather_info(selected_airport, month, day):
         vis_max = np.ceil(weather_df['visib'].max()) if not np.isnan(weather_df['visib'].max()) else 0
 
         st.markdown(f"""
-        **Temperature (°C)**:  Low: {int(temp_min)} | Avg: {int(temp_mean)} | High: {int(temp_max)}  
-
+        **Temperature (°F)**:  Low: {int(temp_min)} | Avg: {int(temp_avg)} | High: {int(temp_max)}  
         **Wind Speed (km/h)**:  Low: {int(wind_min)} | Avg: {int(wind_mean)} | High: {int(wind_max)}  
-
         **Visibility (km)**:  Low: {int(vis_min)} | Avg: {int(vis_mean)} | High: {int(vis_max)}  
         """)
     else:
         st.text("No weather data available.")
+
+
 
 
 def format_time(time_value):
@@ -684,20 +715,29 @@ def format_time(time_value):
 
 
 def display_departure_times(df):
-    """Displays scheduled and actual departure times in HH:MM format."""
-    st.subheader("Departure Times")
-    
-    if not df.empty:
-        # Extract scheduled and actual departure times
-        sched_dep = format_time(df['sched_dep_time'].iloc[0]) if 'sched_dep_time' in df.columns else "N/A"
-        actual_dep = format_time(df['dep_time'].iloc[0]) if 'dep_time' in df.columns else "N/A"
-    else:
-        sched_dep, actual_dep = "N/A", "N/A"
+    """Displays average delay or early departure per day using dep_delay column."""
+    st.subheader("Average Departure Timing")
 
-    st.markdown(f"""
-    **Scheduled Departure:**  {sched_dep}  
-    **Actual Departure:**  {actual_dep}  
-    """)
+    if df.empty or 'dep_delay' not in df.columns:
+        st.markdown("No delay data available.")
+        return
+
+    df = df.dropna(subset=['dep_delay'])
+
+    if df.empty:
+        st.markdown("No valid delay data available.")
+        return
+
+    avg_delay = df['dep_delay'].mean()
+
+    # Format and display result
+    if avg_delay > 0:
+        st.markdown(f"Flights departed on average **{int(avg_delay)} minutes late**.")
+    elif avg_delay < 0:
+        st.markdown(f"Flights departed on average **{abs(int(avg_delay))} minutes early**.")
+    else:
+        st.markdown("Flights departed **on time** on average.")
+
 
 
 def format_hour_label(hour):
@@ -716,41 +756,107 @@ def get_selected_date():
     return selected_date.month, selected_date.day
 
 
-
-
 ##############   #################
 
 
 def time_based_statistics():
-    """Displays statistics for departure airports only."""
+    """Displays time-based flight stats independently from the sidebar."""
     st.header("Statistics as a Function of Time", divider='gray')
 
-    selected_departure = st.session_state.get("fd_origin")
+    #  Select departure airport and date (not tied to session_state)
+    col1, col2 = st.columns([0.6, 0.4])
+    with col1:
+        st.markdown("#### Select Departure Airport")  # or use ## / # / <h3> etc. for bigger text
+        selected_departure = st.selectbox("", ["JFK", "LGA", "EWR"], index=0)
+    with col2:
+        st.markdown("#### Select a Date")
+        selected_date = st.date_input(
+            "",
+            value=pd.to_datetime("2023-01-01"),
+            min_value=pd.to_datetime("2023-01-01"),
+            max_value=pd.to_datetime("2023-12-31"),
+            key="independent_date"
+        )
 
-    if not selected_departure:
-        st.warning("Please select a departure airport.")
+    month = selected_date.month
+    day = selected_date.day
+    departure_faa = selected_departure
+
+    #  Get delays data for selected airport/date
+    df = get_flight_delays(departure_faa, month, day)
+
+    if df.empty:
+        st.warning(f"No flight data available for {departure_faa} on {selected_date.strftime('%Y-%m-%d')}.")
         return
 
-    month, day = get_selected_date()
-    if month is None or day is None:
-        st.warning("Please select a date.")
+    # Display charts and stats in expandable panels
+    with st.expander("Delays per Day", expanded=True):
+        st.markdown("### **Delay Statistics for Selected Airport**")  # Styled title inside
+        col1, spacer, col2 = st.columns([0.65, 0.05, 0.3])
+        with col1:
+            display_delay_chart(df)
+        with col2:
+            display_weather_info(departure_faa, month, day)
+            display_departure_times(df)
+
+    #  Use a separate expander outside of the first one
+    with st.expander("Delays across JFK, LGA and EWR", expanded=False):
+        st.markdown("### **Compare Delays Across JFK, LGA and EWR**")  # Styled title inside
+        display_departure_delay_comparison_custom(month, day)
+
+
+
+
+def display_departure_delay_comparison_custom(month, day):
+    """Custom comparison of delays across JFK, LGA, EWR for a selected date."""
+    nyc_airports_faa = ['JFK', 'LGA', 'EWR']
+    df = get_flight_delays_multiple(nyc_airports_faa, month, day)
+
+    if df.empty:
+        st.warning(f"No flight delay data available for {month}/{day}.")
         return
 
+    df['hour_numeric'] = (df['dep_time'] // 100) % 24
+    df['hour_label'] = df['hour_numeric'].apply(lambda h: f"{h:02d}:00")
+    df_grouped = df.groupby(['hour_numeric', 'hour_label', 'origin'])['dep_delay'].mean().reset_index()
 
-    departure_faa = get_faa(selected_departure)
-    if departure_faa:
-        st.subheader(f"Delay Statistics for {selected_departure}")
-        df = get_flight_delays(departure_faa, month, day)
+    color_map = {'JFK': '#2A61C6', 'LGA': '#90C5FD', 'EWR': '#000080'}
 
-        if not df.empty:
-            col1, spacer, col2 = st.columns([0.65, 0.05, 0.3])
-            with col1:
-                display_delay_chart(df)
-            with col2:
-                display_weather_info(departure_faa, month, day)
-                display_departure_times(df)
-        else:
-            st.warning(f"No flight data available for {selected_departure} on {selected_date}.")
+    fig = px.line(
+        df_grouped,
+        x='hour_label',
+        y='dep_delay',
+        color='origin',
+        markers=True,
+        labels={
+            'hour_label': 'Hour of Day',
+            'dep_delay': 'Avg Delay (minutes)',
+            'origin': 'Airport'
+        },
+        color_discrete_map=color_map,
+        hover_data={'hour_label': False, 'dep_delay': True, 'origin': True}
+    )
+
+    fig.update_traces(
+        hovertemplate='Airport: %{customdata[0]}<br>Hour: %{x}<br>Avg Delay: %{y:.0f} min<extra></extra>',
+        line=dict(width=3)
+    )
+
+    tick_labels = [f"{h:02d}:00" for h in range(0, 24, 4)]
+    fig.update_xaxes(
+        categoryorder='array',
+        categoryarray=[f"{h:02d}:00" for h in range(0, 24)],
+        tickvals=tick_labels,
+        ticktext=tick_labels
+    )
+
+    fig.update_layout(
+        legend=dict(font=dict(size=16), bgcolor="White", bordercolor="LightGray", borderwidth=1),
+        hoverlabel=dict(font_size=16),
+        xaxis_title="Hour of Day",
+        yaxis_title="Avg Delay (minutes)"
+    )
+    st.plotly_chart(fig)
 
 
 
@@ -777,94 +883,12 @@ def get_flight_delays_multiple(airport_faa_list, month, day):
     return df
 
 
-def display_departure_delay_comparison():
-    """Displays a line graph comparing departure delays for three major airports only after a date is selected."""
-    st.subheader("Comparison of Departure Delays Across JFK, LaGuardia and Newark")
-
-        # 🔹 Check if the user has selected a date
-    if "selected_date" not in st.session_state:
-        st.info("Please, select a date from the sidebar.")
-        return
-
-    selected_date = st.session_state["selected_date"]
-
-    if not selected_date:
-        st.info("Please, select a date from the sidebar.")
-        return
-    
-    # Extract month and day from the selected date
-    month = selected_date.month
-    day = selected_date.day
-
-    # Define the three NYC airports
-    nyc_airports_faa = ['JFK', 'LGA', 'EWR']  # FAA codes for JFK, LaGuardia, and Newark
-
-    # Fetch delay data for all three airports
-    df = get_flight_delays_multiple(nyc_airports_faa, month, day)
-
-    if df.empty:
-        st.warning(f"No flight delay data available for {month}/{day}.")
-        return
-
-    # Create numeric hour and string hour label
-    df['hour_numeric'] = (df['dep_time'] // 100) % 24
-    df['hour_label'] = df['hour_numeric'].apply(lambda h: f"{h:02d}:00")
-
-    # Group and aggregate
-    df_grouped = df.groupby(['hour_numeric', 'hour_label', 'origin'])['dep_delay'].mean().reset_index()
-
-
-    # Define custom colors
-    color_map = {
-        'JFK': '#2A61C6',  # default blue
-        'LGA': '#90C5FD',  # light blue
-        'EWR': '#000080'   # navy
-    }
-
-    # Plot
-    fig = px.line(
-        df_grouped,
-        x='hour_label',
-        y='dep_delay',
-        color='origin',
-        labels={'hour_label': 'Hour of Day', 'dep_delay': 'Average Delay (minutes)', 'origin': 'Airport'},
-        markers=True,
-        color_discrete_map=color_map  
-    )
-
-    # Tick labels every 4 hours
-    tick_labels = [f"{h:02d}:00" for h in range(0, 24, 4)]
-    fig.update_xaxes(
-        categoryorder='array',
-        categoryarray=[f"{h:02d}:00" for h in range(0, 24)],
-        tickvals=tick_labels,
-        ticktext=tick_labels,
-        title='Hour of Day'
-    )
-
-    # Make legend larger and clearer
-    fig.update_layout(
-        legend=dict(
-            font=dict(size=16),       # Larger font size
-            bgcolor="White",          # Optional background color
-            bordercolor="LightGray",  # Optional border
-            borderwidth=1
-        )
-    )
-
-    st.plotly_chart(fig)
-
-
-
-
-
-
 ###############  ##############
 
 def initialize_page():
     """Initializes the main dashboard page layout and displays general flight information."""
     
-    # ✅ Ensure session state variables are initialized before use
+    #  Ensure session state variables are initialized before use
     if "fd_details" not in st.session_state:
         st.session_state.fd_details = None
     if "fd_show_data" not in st.session_state:
@@ -1135,7 +1159,7 @@ def main():
     other_airports = get_other_airports()
     create_sidebar()   # Initializes the sidebar separately
     time_based_statistics()  # Displays time-based statistics
-    display_departure_delay_comparison()  # Displays departure delay comparison
+    # display_departure_delay_comparison()  # Displays departure delay comparison
     display_flights_by_month()
     display_top_manufacturers_for_destination()
     display_plane_statistics()
