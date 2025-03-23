@@ -6,7 +6,7 @@ import numpy as np
 import sqlite3
 import part1
 import part3
-import part4
+
 
 
 # ✅ Ensure `set_page_config` is the first Streamlit command
@@ -1020,14 +1020,14 @@ def initialize_page():
             st.session_state.map_type = 'inter'
             st.plotly_chart(part1.all_airports(all_airports_df), key='reset_map')
 
-    # Airport Specific Details Section
-    st.header('Airport Specific Details', divider='gray')
-    with st.container():
-        name = st.selectbox('Airport Name', all_airports_df['name'], index=None, placeholder='Enter airport name')
-        if name:
-            id = all_airports_df[all_airports_df['name'] == name]
-            temp_df = flights_per_airline(id['faa'].item())
-            st.plotly_chart(px.pie(temp_df, names='name', values='num_flights'))
+    # # Airport Specific Details Section
+    # st.header('Airport Specific Details', divider='gray')
+    # with st.container():
+    #     name = st.selectbox('Airport Name', all_airports_df['name'], index=None, placeholder='Enter airport name')
+    #     if name:
+    #         id = all_airports_df[all_airports_df['name'] == name]
+    #         temp_df = flights_per_airline(id['faa'].item())
+    #         st.plotly_chart(px.pie(temp_df, names='name', values='num_flights'))
 
     # Airlines' Average Departure Delays Section
     st.header("Airlines' Average Departure Delays", divider='gray')
