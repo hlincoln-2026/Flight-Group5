@@ -693,8 +693,8 @@ def display_weather_info(selected_airport, month, day):
 
         st.markdown(f"""
         **Temperature (°F)**:  Low: {int(temp_min)} | Avg: {int(temp_avg)} | High: {int(temp_max)}  
-        **Wind Speed (km/h)**:  Low: {int(wind_min)} | Avg: {int(wind_mean)} | High: {int(wind_max)}  
-        **Visibility (km)**:  Low: {int(vis_min)} | Avg: {int(vis_mean)} | High: {int(vis_max)}  
+        **Wind Speed (mph)**:  Low: {int(wind_min)} | Avg: {int(wind_mean)} | High: {int(wind_max)}  
+        **Visibility (mph)**:  Low: {int(vis_min)} | Avg: {int(vis_mean)} | High: {int(vis_max)}  
         """)
     else:
         st.text("No weather data available.")
@@ -791,7 +791,7 @@ def time_based_statistics():
 
     # Display charts and stats in expandable panels
     with st.expander("Delays per Day", expanded=True):
-        st.markdown("### **Delay Statistics for Selected Airport**")  # Styled title inside
+        st.markdown(f"### **Delay Statistics for {departure_faa}**")  # Styled title inside
         col1, spacer, col2 = st.columns([0.65, 0.05, 0.3])
         with col1:
             display_delay_chart(df)
