@@ -630,12 +630,12 @@ def display_delay_chart(df):
 
 
 
+
 def display_weather_info(selected_airport, month, day):
-    """Fetches and displays weather info for a selected airport and date, rounding up values."""
+    """Displays weather info for an airport and date. Falls back to temp_min/avg/max if temp is missing."""
     
-    # Get weather data from the database
     query = f"""
-        SELECT temp, wind_speed, visib
+        SELECT temp, temp_min, temp_avg, temp_max, wind_speed, visib
         FROM weather
         WHERE month = {month} AND day = {day} AND origin = '{selected_airport}'
     """
@@ -644,13 +644,20 @@ def display_weather_info(selected_airport, month, day):
     st.subheader("Weather Forecast")
 
     if not weather_df.empty:
-        # Convert values to numeric (handling potential string values)
-        weather_df = weather_df.apply(pd.to_numeric, errors='coerce')  # Converts non-numeric values to NaN
+        # Convert to numeric and handle missing gracefully
+        weather_df = weather_df.apply(pd.to_numeric, errors='coerce')
 
-        # Handle NaN values safely: replace NaN with 0 (or another placeholder)
-        temp_min = np.ceil(weather_df['temp'].min()) if not np.isnan(weather_df['temp'].min()) else 0
-        temp_mean = np.ceil(weather_df['temp'].mean()) if not np.isnan(weather_df['temp'].mean()) else 0
-        temp_max = np.ceil(weather_df['temp'].max()) if not np.isnan(weather_df['temp'].max()) else 0
+        # Check if temp column is entirely missing
+        if weather_df["temp"].isna().all():
+            # Use fallback columns
+            temp_min = weather_df["temp_min"].iloc[0] if "temp_min" in weather_df.columns else np.nan
+            temp_avg = weather_df["temp_avg"].iloc[0] if "temp_avg" in weather_df.columns else np.nan
+            temp_max = weather_df["temp_max"].iloc[0] if "temp_max" in weather_df.columns else np.nan
+        else:
+            # Use temp column as usual
+            temp_min = np.ceil(weather_df['temp'].min())
+            temp_avg = np.ceil(weather_df['temp'].mean())
+            temp_max = np.ceil(weather_df['temp'].max())
 
         wind_min = np.ceil(weather_df['wind_speed'].min()) if not np.isnan(weather_df['wind_speed'].min()) else 0
         wind_mean = np.ceil(weather_df['wind_speed'].mean()) if not np.isnan(weather_df['wind_speed'].mean()) else 0
@@ -661,14 +668,19 @@ def display_weather_info(selected_airport, month, day):
         vis_max = np.ceil(weather_df['visib'].max()) if not np.isnan(weather_df['visib'].max()) else 0
 
         st.markdown(f"""
-        **Temperature (°C)**:  Low: {int(temp_min)} | Avg: {int(temp_mean)} | High: {int(temp_max)}  
-
+        **Temperature (°F)**:  Low: {int(temp_min)} | Avg: {int(temp_avg)} | High: {int(temp_max)}  
         **Wind Speed (km/h)**:  Low: {int(wind_min)} | Avg: {int(wind_mean)} | High: {int(wind_max)}  
-
         **Visibility (km)**:  Low: {int(vis_min)} | Avg: {int(vis_mean)} | High: {int(vis_max)}  
         """)
     else:
         st.text("No weather data available.")
+
+
+
+
+
+
+
 
 
 def format_time(time_value):
@@ -684,20 +696,29 @@ def format_time(time_value):
 
 
 def display_departure_times(df):
-    """Displays scheduled and actual departure times in HH:MM format."""
-    st.subheader("Departure Times")
-    
-    if not df.empty:
-        # Extract scheduled and actual departure times
-        sched_dep = format_time(df['sched_dep_time'].iloc[0]) if 'sched_dep_time' in df.columns else "N/A"
-        actual_dep = format_time(df['dep_time'].iloc[0]) if 'dep_time' in df.columns else "N/A"
-    else:
-        sched_dep, actual_dep = "N/A", "N/A"
+    """Displays average delay or early departure per day using dep_delay column."""
+    st.subheader("Average Departure Timing")
 
-    st.markdown(f"""
-    **Scheduled Departure:**  {sched_dep}  
-    **Actual Departure:**  {actual_dep}  
-    """)
+    if df.empty or 'dep_delay' not in df.columns:
+        st.markdown("No delay data available.")
+        return
+
+    df = df.dropna(subset=['dep_delay'])
+
+    if df.empty:
+        st.markdown("No valid delay data available.")
+        return
+
+    avg_delay = df['dep_delay'].mean()
+
+    # Format and display result
+    if avg_delay > 0:
+        st.markdown(f"Flights departed on average **{int(avg_delay)} minutes late**.")
+    elif avg_delay < 0:
+        st.markdown(f"Flights departed on average **{abs(int(avg_delay))} minutes early**.")
+    else:
+        st.markdown("Flights departed **on time** on average.")
+
 
 
 def format_hour_label(hour):
@@ -714,8 +735,6 @@ def get_selected_date():
         return None, None
     
     return selected_date.month, selected_date.day
-
-
 
 
 ##############   #################
@@ -853,10 +872,6 @@ def display_departure_delay_comparison():
     )
 
     st.plotly_chart(fig)
-
-
-
-
 
 
 ###############  ##############
