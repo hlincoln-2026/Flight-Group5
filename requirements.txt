@@ -1,4 +1,11 @@
-streamlit
+streamlit #
 plotly
 pandas
 numpy
+matplotlib
+sqlite3  
+requests
+requests-cache  #dependencies used in the weather-fetching logic
+retry-requests  #dependencies used in the weather-fetching logic
+openmeteo-requests  # official package name for Open-Meteo.com API
+seaborn

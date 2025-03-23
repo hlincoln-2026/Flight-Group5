@@ -692,10 +692,15 @@ def display_weather_info(selected_airport, month, day):
         vis_max = np.ceil(weather_df['visib'].max()) if not np.isnan(weather_df['visib'].max()) else 0
 
         st.markdown(f"""
-        **Temperature (°F)**:  Low: {int(temp_min)} | Avg: {int(temp_avg)} | High: {int(temp_max)}  
-        **Wind Speed (mph)**:  Low: {int(wind_min)} | Avg: {int(wind_mean)} | High: {int(wind_max)}  
-        **Visibility (mph)**:  Low: {int(vis_min)} | Avg: {int(vis_mean)} | High: {int(vis_max)}  
-        """)
+        **Temperature (°F):**  
+        &emsp;Low: {int(temp_min)} &nbsp;|&nbsp; Avg: {int(temp_avg)} &nbsp;|&nbsp; High: {int(temp_max)}  
+
+        **Wind Speed (mph):**  
+        &emsp;Low: {int(wind_min)}  &nbsp;|&nbsp; Avg: {int(wind_mean)}  &nbsp;|&nbsp; High: {int(wind_max)}  
+
+        **Visibility (miles):**  
+        &emsp;Low: {int(vis_min)}  &nbsp;|&nbsp; Avg: {int(vis_mean)}  &nbsp;|&nbsp; High: {int(vis_max)}  
+        """, unsafe_allow_html=True)
     else:
         st.text("No weather data available.")
 
@@ -728,13 +733,13 @@ def display_departure_times(df):
         st.markdown("No valid delay data available.")
         return
 
-    avg_delay = df['dep_delay'].mean()
+    avg_delay = round(df['dep_delay'].mean())
 
     # Format and display result
     if avg_delay > 0:
-        st.markdown(f"Flights departed on average **{int(avg_delay)} minutes late**.")
+        st.markdown(f"Flights departed on average **{avg_delay} minutes late**.")
     elif avg_delay < 0:
-        st.markdown(f"Flights departed on average **{abs(int(avg_delay))} minutes early**.")
+        st.markdown(f"Flights departed on average **{abs(avg_delay)} minutes early**.")
     else:
         st.markdown("Flights departed **on time** on average.")
 
@@ -956,12 +961,13 @@ def initialize_page():
             airport = st.selectbox('Select Departing Airport', names, index=None, placeholder='Enter airport name')
             if airport:
                 st.session_state.delay_info_ap = airport
-                st.text(f'Average Daily Flights: {average_daily_flights(airport)} flights')
-                st.text(f'Average Monthly Flights: {average_monthly_flights(airport)} flights')
+                st.text(f'Average Daily Flights: {round(average_daily_flights(airport))} flights')
+                st.text(f'Average Monthly Flights: {round(average_monthly_flights(airport))} flights')
+
 
         if st.session_state.fetch_general_info:
-            st.text(f'Average Daily Flights from NYC: {average_daily_flights()} flights')
-            st.text(f'Average Monthly Flights from NYC: {average_monthly_flights()} flights')
+            st.text(f'Average Daily Flights from NYC: {round(average_daily_flights())} flights')
+            st.text(f'Average Monthly Flights from NYC: {round(average_monthly_flights())} flights')
 
     # Map of Airports Section
     st.header('Map of Airports', divider='gray')
@@ -1160,7 +1166,6 @@ def main():
     other_airports = get_other_airports()
     create_sidebar()   # Initializes the sidebar separately
     time_based_statistics()  # Displays time-based statistics
-    # display_departure_delay_comparison()  # Displays departure delay comparison
     display_flights_by_month()
     display_top_manufacturers_for_destination()
     display_plane_statistics()
