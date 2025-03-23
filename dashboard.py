@@ -614,19 +614,43 @@ def display_delay_chart(df):
         st.warning("Flight data is missing 'dep_time'. Cannot display delay chart.")
         return
 
+    # Extract hour from departure time
     df['hour'] = (df['dep_time'] // 100) % 24
-    df_grouped = df.groupby('hour')['dep_delay'].mean().reset_index()
-    df_grouped['hour'] = df_grouped['hour'].apply(format_hour_label)
 
-    # st.subheader("Average Delay on Selected Date")
-    fig = px.line(df_grouped, x='hour', y='dep_delay', markers=True, 
-                  labels={'hour': 'Hour of Day', 'dep_delay': 'Average Delay (minutes)'})
+    # Group by hour and compute average delay
+    df_grouped = df.groupby('hour')['dep_delay'].mean().reset_index()
+    df_grouped['hour_label'] = df_grouped['hour'].apply(format_hour_label)
+    df_grouped['avg_delay_rounded'] = df_grouped['dep_delay'].round(0)
+
+    # Create line chart with custom hover info
+    fig = px.line(
+        df_grouped,
+        x='hour_label',
+        y='avg_delay_rounded',
+        markers=True,
+        labels={'hour_label': 'Hour of Day', 'avg_delay_rounded': 'Avg Delay (min)'},
+        hover_data={'hour_label': False, 'avg_delay_rounded': True}
+    )
+
+    fig.update_traces(
+        hovertemplate='Hour: %{x}<br>Avg Delay: %{y} min<extra></extra>',
+        line=dict(width=3)
+    )
 
     fig.update_xaxes(
-    tickvals=[f"{h:02d}:00" for h in range(0, 24, 4)],
-    range=["00:00", "24:00"]
+        tickvals=[f"{h:02d}:00" for h in range(0, 24, 4)],
+        range=["00:00", "24:00"]
     )
+
+    fig.update_layout(
+        title="",
+        xaxis_title="Hour of Day",
+        yaxis_title="Avg Delay (minutes)",
+        hoverlabel=dict(font_size=16)
+    )
+
     st.plotly_chart(fig)
+
 
 
 
@@ -804,8 +828,18 @@ def display_departure_delay_comparison_custom(month, day):
         y='dep_delay',
         color='origin',
         markers=True,
-        labels={'hour_label': 'Hour of Day', 'dep_delay': 'Average Delay (minutes)', 'origin': 'Airport'},
-        color_discrete_map=color_map
+        labels={
+            'hour_label': 'Hour of Day',
+            'dep_delay': 'Avg Delay (minutes)',
+            'origin': 'Airport'
+        },
+        color_discrete_map=color_map,
+        hover_data={'hour_label': False, 'dep_delay': True, 'origin': True}
+    )
+
+    fig.update_traces(
+        hovertemplate='Airport: %{customdata[0]}<br>Hour: %{x}<br>Avg Delay: %{y:.0f} min<extra></extra>',
+        line=dict(width=3)
     )
 
     tick_labels = [f"{h:02d}:00" for h in range(0, 24, 4)]
@@ -817,9 +851,11 @@ def display_departure_delay_comparison_custom(month, day):
     )
 
     fig.update_layout(
-        legend=dict(font=dict(size=16), bgcolor="White", bordercolor="LightGray", borderwidth=1)
+        legend=dict(font=dict(size=16), bgcolor="White", bordercolor="LightGray", borderwidth=1),
+        hoverlabel=dict(font_size=16),
+        xaxis_title="Hour of Day",
+        yaxis_title="Avg Delay (minutes)"
     )
-
     st.plotly_chart(fig)
 
 
