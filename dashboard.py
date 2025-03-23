@@ -467,7 +467,7 @@ def average_daily_flights(airport=None):
 
     daily_average = round(total_flights / total_days, 2)
 
-    return daily_average
+    return int(daily_average)
 
     
 def average_monthly_flights(airport=None):
@@ -489,7 +489,7 @@ def average_monthly_flights(airport=None):
         current_month += 1
 
     average = round(total_size / len(months),2)
-    return average
+    return int(average)
 
 # def get_nyc_names():
 #     nyc_lst = ['FOK','ISP','FRG','JFK','LGA','HPN','MGJ','SWF','BGM','ELM','ITH','JHW',
@@ -1032,7 +1032,19 @@ def initialize_page():
     # Airlines' Average Departure Delays Section
     st.header("Airlines' Average Departure Delays", divider='gray')
     delay_data = part3.average_departure_delay()
-    st.bar_chart(delay_data, x_label='Airline', y_label='Average Departure Delay')
+
+    # Converts to a pandas dataframe so it can be used for px.bar
+    delay_df = pd.DataFrame(list(delay_data.items()), columns=['airline_name', 'average_departure_delay'])
+
+    # Initializes the figure
+    fig = px.bar(delay_df, 
+                 x="average_departure_delay", 
+                 y="airline_name", orientation="h", 
+                 title="Average Departure Delay by Airline", 
+                 labels={"average_departure_delay": "Average Departure Delay (minutes)", "airline_name": "Airline"})
+    
+    # Displays the figure
+    st.plotly_chart(fig, use_container_width=True)
 
     # Flight Details Section
     st.header("Flight Details", divider='gray')
