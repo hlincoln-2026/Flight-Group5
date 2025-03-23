@@ -692,10 +692,15 @@ def display_weather_info(selected_airport, month, day):
         vis_max = np.ceil(weather_df['visib'].max()) if not np.isnan(weather_df['visib'].max()) else 0
 
         st.markdown(f"""
-        **Temperature (°F)**:  Low: {int(temp_min)} | Avg: {int(temp_avg)} | High: {int(temp_max)}  
-        **Wind Speed (mph)**:  Low: {int(wind_min)} | Avg: {int(wind_mean)} | High: {int(wind_max)}  
-        **Visibility (mph)**:  Low: {int(vis_min)} | Avg: {int(vis_mean)} | High: {int(vis_max)}  
-        """)
+        **Temperature (°F):**  
+        &emsp;Low: {int(temp_min)} &nbsp;|&nbsp; Avg: {int(temp_avg)} &nbsp;|&nbsp; High: {int(temp_max)}  
+
+        **Wind Speed (mph):**  
+        &emsp;Low: {int(wind_min)}  &nbsp;|&nbsp; Avg: {int(wind_mean)}  &nbsp;|&nbsp; High: {int(wind_max)}  
+
+        **Visibility (miles):**  
+        &emsp;Low: {int(vis_min)}  &nbsp;|&nbsp; Avg: {int(vis_mean)}  &nbsp;|&nbsp; High: {int(vis_max)}  
+        """, unsafe_allow_html=True)
     else:
         st.text("No weather data available.")
 
