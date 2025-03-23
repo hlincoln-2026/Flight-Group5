@@ -1016,7 +1016,7 @@ def initialize_page():
     fig = px.bar(delay_df, 
                  x="average_departure_delay", 
                  y="airline_name", orientation="h", 
-                 title="Airlines' Average Departure Delays by Airline", 
+                 title="Average Departure Delay by Airline", 
                  labels={"average_departure_delay": "Average Departure Delay (minutes)", "airline_name": "Airline"})
     
     # Displays the figure
