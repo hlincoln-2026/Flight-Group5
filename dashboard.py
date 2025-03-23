@@ -775,7 +775,7 @@ def time_based_statistics():
             display_weather_info(departure_faa, month, day)
             display_departure_times(df)
 
-    # 💡 Use a separate expander outside of the first one
+    #  Use a separate expander outside of the first one
     with st.expander("Delays across JFK, LGA and EWR", expanded=False):
         st.markdown("### **Compare Delays Across JFK, LGA and EWR**")  # Styled title inside
         display_departure_delay_comparison_custom(month, day)
