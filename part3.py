@@ -1,9 +1,9 @@
 import sqlite3
 import part1
 import pandas as pd
-
 from matplotlib import pyplot as plt
 import plotly.graph_objects as go
+import seaborn as sns
 
 def get_df_from_database(query):
     conn = sqlite3.connect('flights_database.db')
@@ -70,6 +70,7 @@ def get_nyc_airports():
     df = pd.DataFrame(cursor.fetchall(), columns = [x[0] for x in cursor.description])
 
     airport_set = set(df['origin'])
+    conn.close()
     return get_nyc_names(airport_set)
 
 
@@ -383,10 +384,39 @@ def top_airplane_manufacturers(dest):
 
 def analyze_distance_vs_arrival_delay():
     """Investigate the relationship between flight distance and arrival delay time."""
-    
-    pass
+    conn = sqlite3.connect('flights_database.db')
 
+    # Query to select distance and arr_delay where both columns have a non-null value for that entry.
+    query = """
+    SELECT distance, arr_delay
+    FROM flights
+    WHERE arr_delay IS NOT NULL AND distance IS NOT NULL;
+    """
 
+    df = pd.read_sql_query(query, conn)
+
+    # Close the connection
+    conn.close()
+
+    # Get summary statistics of the data frame, specifically the count, mean, standard deviation, minimum, Q1, median, Q3, and maximum for distance and arr_delay
+    print(df.describe())
+
+    # Set up the scatter plot
+    plt.figure(figsize=(10,6))
+    sns.scatterplot(x='distance', y='arr_delay', data=df, alpha=0.5)
+    plt.title('Flight Distance vs Arrival Delay Time')
+    plt.xlabel('Distance (miles)')
+    plt.ylabel('Arrival Delay Time (minutes)')
+    plt.grid(True)
+
+    # Display the scatter plot
+    plt.show()
+
+    # Compute the correlation between distance and arr_delay
+    correlation = df['distance'].corr(df['arr_delay'])
+    # Print out the correlation
+    print(f"Correlation coefficient between flight distance and arrival delay time: {correlation:.2f}")
+   
 def calculate_average_plane_speed():
     """Calculate the average speed (in mph) for each plane model.
     and update the speed column in the planes table."""
